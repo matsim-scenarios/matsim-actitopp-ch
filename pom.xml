@@ -3,11 +3,11 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.matsim</groupId>
-	<artifactId>matsim-example-project</artifactId>
+	<artifactId>snf-big-data</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 
-	<name>MATSim example project</name>
-	<description>MATSim example project</description>
+	<name>SNF Big Data project</name>
+	<description>SNF Big Data project</description>
 
 	<properties>
 	  <!-- release> -->
@@ -35,6 +35,10 @@
 			<id>ojo-snapshots</id>
 			<url>http://oss.jfrog.org/libs-snapshot</url>
 		</repository>	
+		<repository>
+			<id>jitpack.io</id>
+			<url>https://jitpack.io</url>
+		</repository>
 	</repositories>
 
 	<dependencies>
@@ -68,6 +72,18 @@
 		<!--	<artifactId>matsim-examples</artifactId>-->
 		<!--	<version>${matsim.version}</version>-->
 		<!--</dependency>-->
+		
+		<dependency>
+			<groupId>com.github.mobitopp</groupId>
+			<artifactId>actitopp</artifactId>
+		<version>master-SNAPSHOT</version>
+		</dependency>
+		<dependency>
+			<groupId>org.matsim.vsp.vsp-playgrounds</groupId>
+			<artifactId>vsp</artifactId>
+			<version>0.11.0-SNAPSHOT</version>
+			<scope>compile</scope>
+		</dependency>
 
 	</dependencies>
 
