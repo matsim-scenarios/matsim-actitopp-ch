@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -44,25 +46,28 @@ public class IvtPopulationParser {
     // private static final String HOME_ZONE_ID = "home_zone_id";
     private static final String MUNICIPALITY_TYPE = "municipality_type";
     // private static final String HOME_MUNICIPALITY_ID = "home_municipality_id";
-    // private static final String CANTON_ID = "canton_id";
+    private static final String CANTON_ID = "canton_id";
     private static final String NUMBER_OF_CARS_CLASS = "number_of_cars_class";
     // private static final String DRIVING_LICENSE = "driving_license";
     // private static final String CAR_AVAILABILITY = "car_availability";
     private static final String EMPLOYED = "employed";
+
     private Population population;
-    ;
     private Households households;
-    ;
     private ActivityFacilities facilities;
-    ;
+
+    private List<Integer> cantonsIncluded;
+
 
     public static void main(String[] args) {
         // TODO try to use gzipped file
         Path inputFile = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/ivt_syn_pop/population.csv");
-        String outputFileRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/";
+        String outputFileRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         double sampleSize = 0.01;
+        List<Integer> cantonsIncluded = Arrays.asList(24); // 24 = Neuenburg
 
         IvtPopulationParser ivtPopulationParser = new IvtPopulationParser();
+        ivtPopulationParser.setCantonsIncluded(cantonsIncluded);
         ivtPopulationParser.createPopulationHouseholdsAndFacilities(inputFile);
         // ivtPopulationParser.writeMatsimFiles(outputFileRoot);
 
@@ -82,6 +87,11 @@ public class IvtPopulationParser {
 
         try (CSVParser parser = CSVParser.parse(inputFile, StandardCharsets.UTF_8, CSVFormat.newFormat(',').withFirstRecordAsHeader())) {
             for (CSVRecord record : parser) {
+                int cantonId = (int) Double.parseDouble(record.get(CANTON_ID));
+                if (cantonsIncluded != null && !cantonsIncluded.contains(cantonId)) {
+                    continue;
+                }
+
                 Id<Person> personId = Id.createPersonId(record.get(PERSON_ID));
                 Person person = populationFactory.createPerson(personId);
                 population.addPerson(person);
@@ -112,6 +122,10 @@ public class IvtPopulationParser {
                 MunicipalityType municipalityType = getMunicipalityType(municipalityTypeRecord);
                 household.getAttributes().putAttribute(AttributeLabels.municipality_type.toString(), municipalityType.toString());
                 person.getAttributes().putAttribute(AttributeLabels.municipality_type.toString(), municipalityType.toString());
+
+                person.getAttributes().putAttribute(AttributeLabels.canton_id.toString(), cantonId);
+                household.getAttributes().putAttribute(AttributeLabels.canton_id.toString(), cantonId);
+                facility.getAttributes().putAttribute(AttributeLabels.canton_id.toString(), cantonId);
 
                 Integer numberOfCars = Integer.valueOf(record.get(NUMBER_OF_CARS_CLASS));
                 // Note: The classes are 0, 1, 2, 3+, but we simplify it to 0, 1, 2, 3.
@@ -275,8 +289,12 @@ public class IvtPopulationParser {
         facilitiesWriter.write(outputFileRoot + "facilities.xml.gz");
     }
 
+    public void setCantonsIncluded(List<Integer> cantonsIncluded) {
+        this.cantonsIncluded = cantonsIncluded;
+    }
+
     enum AttributeLabels {
-        household_id, gender, age, household_size, municipality_type, number_of_cars,
+        household_id, gender, age, household_size, municipality_type, canton_id, number_of_cars,
         driving_license, car_availability, employed, children_0_10, children_0_18, facility_id
     }
 
