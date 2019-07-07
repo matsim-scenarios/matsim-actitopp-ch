@@ -29,6 +29,7 @@ import org.matsim.households.HouseholdsWriterV10;
 import org.matsim.utils.objectattributes.attributable.Attributes;
 import org.opengis.feature.simple.SimpleFeature;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -62,7 +63,7 @@ public class IvtPopulationParser {
     public static void main(String[] args) {
         // TODO try to use gzipped file
         Path inputFile = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/ivt_syn_pop/population.csv");
-        String outputFileRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct_2/";
+        String outputFileRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         double sampleSize = 0.01;
         List<Integer> cantonsIncluded = Arrays.asList(24); // 24 = Neuenburg
 
@@ -216,6 +217,7 @@ public class IvtPopulationParser {
     }
 
     public static void writeMatsimFiles(Scenario scenario, String outputFileRoot, String suffix) {
+        (new File(outputFileRoot)).mkdir();
         LOG.info("Start writing population, households, and facilities files.");
         PopulationWriter popWriter = new PopulationWriter(scenario.getPopulation());
         popWriter.write(outputFileRoot + "population" + suffix + ".xml.gz");
