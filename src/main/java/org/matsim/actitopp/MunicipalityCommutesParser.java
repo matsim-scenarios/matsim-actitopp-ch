@@ -5,6 +5,7 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.log4j.Logger;
 import org.matsim.api.core.v01.Id;
+import org.matsim.core.gbl.MatsimRandom;
 import org.matsim.counts.Count;
 import org.matsim.counts.Counts;
 import org.matsim.counts.CountsWriter;
@@ -58,13 +59,16 @@ public class MunicipalityCommutesParser {
         String nameLabelOld = "Regionsname_Alt";
         String nameLabelNew = "Regionsname_Neu";
 
-        String outputFileCommuteCounts = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018.xml.gz";
+        double sampleSize = 0.01;
+
+        String outputFileCommuteCounts = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
 
         MunicipalityCommutesParser commuteMatrixParser = new MunicipalityCommutesParser(inputFileMunicipalities);
         commuteMatrixParser.setCantonsIncluded(cantonsIncluded);
         commuteMatrixParser.setMunicipalityUpdater(inputFileMunicipalityUpdates, idLabelOld, idLabelNew, nameLabelOld, nameLabelNew);
 
         Counts commuteCounts = commuteMatrixParser.createCommuteCounts(inputFileMatrix);
+        commuteMatrixParser.scaleCounts(commuteCounts, sampleSize);
         commuteMatrixParser.writeCommuteCounts(commuteCounts, outputFileCommuteCounts);
     }
 
@@ -163,6 +167,25 @@ public class MunicipalityCommutesParser {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    public void scaleCounts(Counts commuteCounts, double sampleSize) {
+        Random random = MatsimRandom.getLocalInstance();
+        for (Object count : commuteCounts.getCounts().values()) {
+            for (Object volume : ((Count) count).getVolumes().values()) {
+                double value = ((Volume) volume).getValue();
+                double scaledValue = value * sampleSize;
+                int intPart = (int) scaledValue;
+                double decimalPart = scaledValue - intPart;
+                double result;
+                if (random.nextDouble() < decimalPart) {
+                    result = Math.ceil(scaledValue);
+                } else {
+                    result = Math.floor(scaledValue);
+                }
+                ((Volume) volume).setValue(result);
+            }
         }
     }
 
