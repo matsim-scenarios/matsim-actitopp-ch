@@ -8,8 +8,7 @@ import org.matsim.api.core.v01.Id;
 import org.matsim.counts.Count;
 import org.matsim.counts.Counts;
 import org.matsim.counts.CountsWriter;
-import org.matsim.utils.objectattributes.ObjectAttributes;
-import org.matsim.utils.objectattributes.ObjectAttributesXmlWriter;
+import org.matsim.counts.Volume;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,28 +34,44 @@ public class MunicipalityCommutesParser {
     private static final String MUNI_TO = "muni_to";
     private static final String COUNT = "count";
 
-    List<Id<Canton>> cantonsIncluded;
-    List<Id<Municipality>> consideredMunicipalities = new ArrayList<>();
-
-    ObjectAttributes municipalities = new ObjectAttributes();
+    private List<Id<Canton>> cantonsIncluded;
+    private List<Id<Municipality>> consideredMunicipalities = new ArrayList<>();
     private Map<String, Id<Municipality>> municipalityNameToIdMap = new HashMap<>();
-    private Counts commuteCounts = new Counts();
+    private Map<Id<Municipality>, Id<Canton>> municipalityToCantonMap = new HashMap<>();
+    private Map<Id<Municipality>, Id<Municipality>> municipalityIdConversionMap;
+    private Map<String, String> municipalityNameConversionMap;
+
+    public MunicipalityCommutesParser(Path inputFileMunicipalities) {
+        readAndStoreMunicipalities(inputFileMunicipalities);
+    }
 
     public static void main(String[] args) {
         // TODO try to use gzipped file
-        Path inputFileMunicipalities = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2012/12501_131.csv");
+        Path inputFileMunicipalities = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2012/12501_131.csv"); // 2012
         Path inputFileMatrix = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/swisscom/eth2/Eth4_20161001.txt");
-        // String outputFileMunicipalities = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/municipalities_2012.xml.gz";
-        String outputFileCommuteCounts = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg.xml.gz";
 
         List<Id<Canton>> cantonsIncluded = Arrays.asList(Id.create(24, Canton.class)); // 24 = Neuenburg
 
-        MunicipalityCommutesParser commuteMatrixParser = new MunicipalityCommutesParser();
+        Path inputFileMunicipalityUpdates = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2012-2018_changes/2012-2018_changes.csv");
+        String idLabelOld = "Regions-ID_Alt";
+        String idLabelNew = "Regions-ID_Neu";
+        String nameLabelOld = "Regionsname_Alt";
+        String nameLabelNew = "Regionsname_Neu";
+
+        String outputFileCommuteCounts = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018.xml.gz";
+
+        MunicipalityCommutesParser commuteMatrixParser = new MunicipalityCommutesParser(inputFileMunicipalities);
         commuteMatrixParser.setCantonsIncluded(cantonsIncluded);
-        commuteMatrixParser.readAndStoreMunicipalities(inputFileMunicipalities);
-        commuteMatrixParser.createCommuteCounts(inputFileMatrix);
-        // commuteMatrixParser.writeMunicipalitiesFile(outputFileMunicipalities);
-        commuteMatrixParser.writeCommuteCounts(outputFileCommuteCounts);
+        commuteMatrixParser.setMunicipalityUpdater(inputFileMunicipalityUpdates, idLabelOld, idLabelNew, nameLabelOld, nameLabelNew);
+
+        Counts commuteCounts = commuteMatrixParser.createCommuteCounts(inputFileMatrix);
+        commuteMatrixParser.writeCommuteCounts(commuteCounts, outputFileCommuteCounts);
+    }
+
+    public static void writeCommuteCounts(Counts commuteCounts, String outputFile) {
+        LOG.info("Start writing commute counts file.");
+        CountsWriter countsWriter = new CountsWriter(commuteCounts);
+        countsWriter.write(outputFile);
     }
 
     private void readAndStoreMunicipalities(Path inputFile) {
@@ -73,30 +88,26 @@ public class MunicipalityCommutesParser {
                 LOG.info("Municipality " + name + " with id " + munId + " added (Canton: " + cantonId.toString() + ").");
 
                 municipalityNameToIdMap.put(name, munId);
-
-                municipalities.putAttribute(munId.toString(), "name", name);
-                municipalities.putAttribute(munId.toString(), IvtPopulationParser.AttributeLabels.canton_id.toString(), cantonId);
-
-                if (cantonsIncluded != null && cantonsIncluded.contains(cantonId)) {
-                    consideredMunicipalities.add(munId);
-                }
+                municipalityToCantonMap.put(munId, cantonId);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void createCommuteCounts(Path inputFile) {
+    public Counts createCommuteCounts(Path inputFile) {
         LOG.info("Start creating commute counts.");
+        Counts commuteCounts = new Counts();
 
         try (CSVParser parser = CSVParser.parse(inputFile, StandardCharsets.UTF_8, CSVFormat.newFormat(',').withFirstRecordAsHeader())) {
             for (CSVRecord record : parser) {
-                int hour = Integer.valueOf(record.get(HOUR));
-                String muniFrom = record.get(MUNI_FROM);
-                String muniTo = record.get(MUNI_TO);
-                Id<Municipality> muniFromId = municipalityNameToIdMap.get(muniFrom);
-                Id<Municipality> muniToId = municipalityNameToIdMap.get(muniTo);
+                int hour = Integer.valueOf(record.get(HOUR)) + 1;
+                String muniFromName = record.get(MUNI_FROM);
+                String muniToName = record.get(MUNI_TO);
                 int value = Integer.valueOf(record.get(COUNT));
+
+                Id<Municipality> muniFromId = municipalityNameToIdMap.get(muniFromName);
+                Id<Municipality> muniToId = municipalityNameToIdMap.get(muniToName);
 
                 if (cantonsIncluded != null) {
                     if (!consideredMunicipalities.contains(muniFromId) || !consideredMunicipalities.contains(muniToId)) {
@@ -104,8 +115,15 @@ public class MunicipalityCommutesParser {
                     }
                 }
 
+                if (municipalityIdConversionMap != null) {
+                    muniFromId = municipalityIdConversionMap.get(muniFromId);
+                    muniToId = municipalityIdConversionMap.get(muniToId);
+                    muniFromName = municipalityNameConversionMap.get(muniFromName);
+                    muniToName = municipalityNameConversionMap.get(muniToName);
+                }
+
                 String realtionIds = muniFromId + "_" + muniToId;
-                String description = muniFrom + "_" + muniTo;
+                String description = muniFromName + "_" + muniToName;
                 Id<Relation> id = Id.create(realtionIds, Relation.class);
 
                 Count count;
@@ -114,27 +132,48 @@ public class MunicipalityCommutesParser {
                 } else {
                     count = commuteCounts.getCount(id);
                 }
-                count.createVolume(hour + 1, value);
+
+                if (count.getVolume(hour) == null) {
+                    count.createVolume(hour, value);
+                } else {
+                    double oldValue = ((Volume) count.getVolumes().get(hour)).getValue();
+                    ((Volume) count.getVolumes().get(hour)).setValue(oldValue + value);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return commuteCounts;
+    }
+
+    public void setMunicipalityUpdater(Path inputMunicipalityConversion, String idLabelOld, String idLabelNew, String nameLabelOld, String nameLabelNew) {
+        LOG.info("Start creating municipalities map.");
+        this.municipalityIdConversionMap = new HashMap<>();
+        this.municipalityNameConversionMap = new HashMap<>();
+
+        try (CSVParser parser = CSVParser.parse(inputMunicipalityConversion, StandardCharsets.UTF_8, CSVFormat.newFormat(';').withFirstRecordAsHeader())) {
+            for (CSVRecord record : parser) {
+                Id<Municipality> munIdOld = Id.create(Integer.valueOf(record.get(idLabelOld)), Municipality.class);
+                Id<Municipality> munIdNew = Id.create(Integer.valueOf(record.get(idLabelNew)), Municipality.class);
+                String munNameOld = record.get(nameLabelOld);
+                String munNameNew = record.get(nameLabelNew);
+
+                municipalityIdConversionMap.put(munIdOld, munIdNew);
+                municipalityNameConversionMap.put(munNameOld, munNameNew);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void writeMunicipalitiesFile(String outputFile) {
-        LOG.info("Start writing municipalities file.");
-        ObjectAttributesXmlWriter writer = new ObjectAttributesXmlWriter(municipalities);
-        writer.writeFile(outputFile);
-    }
-
-    private void writeCommuteCounts(String outputFile) {
-        LOG.info("Start writing commute counts file.");
-        CountsWriter countsWriter = new CountsWriter(commuteCounts);
-        countsWriter.write(outputFile);
-    }
-
     public void setCantonsIncluded(List<Id<Canton>> cantonsIncluded) {
         this.cantonsIncluded = cantonsIncluded;
+
+        for (Id<Municipality> municipalityId : municipalityToCantonMap.keySet()) {
+            if (cantonsIncluded != null && cantonsIncluded.contains(municipalityToCantonMap.get(municipalityId))) {
+                consideredMunicipalities.add(municipalityId);
+            }
+        }
     }
 
     // Inner classes
