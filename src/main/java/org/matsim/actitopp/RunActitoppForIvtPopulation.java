@@ -3,20 +3,38 @@ package org.matsim.actitopp;
 import edu.kit.ifv.mobitopp.actitopp.*;
 import org.apache.log4j.Logger;
 import org.matsim.api.core.v01.Coord;
-import org.matsim.api.core.v01.DefaultActivityTypes;
+import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.Scenario;
 import org.matsim.api.core.v01.TransportMode;
+import org.matsim.api.core.v01.network.Link;
+import org.matsim.api.core.v01.network.Network;
+import org.matsim.api.core.v01.network.Node;
 import org.matsim.api.core.v01.population.*;
 import org.matsim.core.config.ConfigUtils;
 import org.matsim.core.gbl.MatsimRandom;
+import org.matsim.core.network.NetworkUtils;
+import org.matsim.core.network.algorithms.TransportModeNetworkFilter;
+import org.matsim.core.network.io.MatsimNetworkReader;
 import org.matsim.core.population.io.PopulationReader;
+import org.matsim.core.router.FastDijkstraFactory;
+import org.matsim.core.router.costcalculators.FreespeedTravelTimeAndDisutility;
+import org.matsim.core.router.util.LeastCostPathCalculator;
+import org.matsim.core.scenario.MutableScenario;
 import org.matsim.core.scenario.ScenarioUtils;
 import org.matsim.core.utils.geometry.CoordUtils;
+import org.matsim.core.utils.gis.ShapeFileReader;
+import org.matsim.counts.Count;
+import org.matsim.counts.Counts;
+import org.matsim.counts.MatsimCountsReader;
+import org.matsim.counts.Volume;
+import org.matsim.facilities.ActivityFacilities;
+import org.matsim.facilities.ActivityFacility;
+import org.matsim.facilities.MatsimFacilitiesReader;
 import org.matsim.utils.objectattributes.attributable.Attributes;
+import org.opengis.feature.simple.SimpleFeature;
 import playground.vsp.openberlinscenario.cemdap.input.CEMDAPPersonAttributes;
 
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 /**
  * @author dziemke
@@ -24,60 +42,172 @@ import java.util.Random;
 public class RunActitoppForIvtPopulation {
     private static final Logger LOG = Logger.getLogger(RunActitoppForIvtPopulation.class);
     private static ModelFileBase fileBase = new ModelFileBase();
-    ;
     private static RNGHelper randomgenerator = new RNGHelper(1234);
+
+    Map<Integer, Coord> municipalityCenters;
+    Random random = MatsimRandom.getLocalInstance();
+    LeastCostPathCalculator leastCostPathCalculator;
+    private Scenario scenario;
+    private Map<Integer, List<Integer>> observedCommutes;
+
+    public RunActitoppForIvtPopulation(Scenario scenario, String municipalitiesShapeFile, String countsFile,
+                                       int beginReprTimePeriod, int endReprTimePeriod) {
+        this.scenario = scenario;
+
+        prepareObservedCommutes(countsFile, beginReprTimePeriod, endReprTimePeriod);
+        createMunicipalityCenterMap(municipalitiesShapeFile);
+
+        FreespeedTravelTimeAndDisutility freeSpeed = new FreespeedTravelTimeAndDisutility(scenario.getConfig().planCalcScore());
+        leastCostPathCalculator = (new FastDijkstraFactory()).createPathCalculator(scenario.getNetwork(), freeSpeed, freeSpeed);
+    }
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/";
+        String folderRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
-        String populationScheduleFile = folderRoot + "population_plans_1pct.xml.gz";
+        String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
+        String networkFile = "../../svn/shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
 
-        Scenario scenario = ScenarioUtils.createScenario(ConfigUtils.createConfig());
-        PopulationReader reader = new PopulationReader(scenario);
-        reader.readFile(populationFile);
+        String municipalitiesShapeFile = "../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
+        String countsFile = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
+        int beginReprTimePeriod = 6;
+        int endReprTimePeriod = 10;
 
-        runActitopp(scenario.getPopulation());
-        writeMatsimPlansFile(scenario.getPopulation(), populationScheduleFile);
+        String populationScheduleFile = folderRoot + "population_1pct_plans.xml.gz";
+
+        // Create scenario
+        MutableScenario scenario = ScenarioUtils.createMutableScenario(ConfigUtils.createConfig());
+        new PopulationReader(scenario).readFile(populationFile);
+        new MatsimFacilitiesReader(scenario).readFile(facilitiesFile);
+        new MatsimNetworkReader(scenario.getNetwork()).readFile(networkFile);
+        TransportModeNetworkFilter filter = new TransportModeNetworkFilter(scenario.getNetwork());
+        Network carNetwork = NetworkUtils.createNetwork();
+        Set<String> modeSet = new HashSet<>();
+        modeSet.add(TransportMode.car);
+        filter.filter(carNetwork, modeSet);
+        scenario.setNetwork(carNetwork);
+
+        // Script
+        RunActitoppForIvtPopulation ivtPopulationScheduler = new RunActitoppForIvtPopulation(scenario, municipalitiesShapeFile,
+                countsFile, beginReprTimePeriod, endReprTimePeriod);
+        ivtPopulationScheduler.runActitopp();
+        ivtPopulationScheduler.writeMatsimPlansFile(scenario.getPopulation(), populationScheduleFile);
     }
 
-    private static void runActitopp(Population population) {
-        for (Person matsimPerson : population.getPersons().values()) {
-            ActitoppPerson actitoppPerson = createActitoppPersonSwitzerland(matsimPerson);
-            HWeekPattern weekPattern = createActitoppWeekPattern(actitoppPerson);
 
-            PopulationFactory populationFactory = population.getFactory();
-            matsimPerson.addPlan(createMatsimPlan(weekPattern, populationFactory));
+//    private void findMUnicipality
+
+    // Information from "https://github.com/mobitopp/actitopp"
+    // 1 = full-time occupied; 2 = half-time occupied; 3 = not occupied; 4 = student (school or university);
+    // 5 = worker in vocational program; 7 = retired person / pensioner
+    private static int getEmploymentClassSwitzerland(boolean employed, int age) {
+        Random random = MatsimRandom.getLocalInstance();
+        int employmentClass = -1;
+        if (employed) {
+            double randomNumber = random.nextDouble();
+            if (randomNumber < 0.7) { // TODO substantiate this figure
+                employmentClass = 1;
+            } else if (randomNumber >= 0.7 && randomNumber < 0.98) { // TODO substantiate this figure
+                employmentClass = 2;
+            } else {
+                employmentClass = 5;
+            }
+        } else {
+            double randomNumber = random.nextDouble();
+            if (age > 65) { // TODO substantiate this figure
+                employmentClass = 7;
+            } else if (age < 25) { // TODO substantiate this figure
+                employmentClass = 4;
+            } else {
+                employmentClass = 5;
+            }
+        }
+        return employmentClass;
+    }
+
+    // Information from "https://github.com/mobitopp/actitopp"
+    // 1 = rural; 2 = provincial; 3 = cityoutskirt; 4 = metropolitan; 5 = conurbation
+    // 5 = >500000 im Regionkern
+    // 4 = 50000-500000 im Regionskern
+    // 3 = >50000 am Regionsrand
+    // 2 = 5000-50000
+    // 1 = < 5000
+    // Based on BIK regions, cf. MOP
+    private static int getAreaTypeSwitzerland(IvtPopulationParser.MunicipalityType municipalityType) {
+        int areaType = -1;
+        if (IvtPopulationParser.MunicipalityType.urban == municipalityType) {
+            areaType = 4;
+        } else if (IvtPopulationParser.MunicipalityType.suburban == municipalityType) {
+            areaType = 3;
+        } else if (IvtPopulationParser.MunicipalityType.rural == municipalityType) {
+            areaType = 1;
+        }
+        return areaType;
+    }
+
+    // Information from "https://github.com/mobitopp/actitopp/blob/master/src/main/java/edu/kit/ifv/mobitopp/actitopp/Configuration.java"
+    private static String transformActType(ActivityType activityTypeLetter) {
+        if (activityTypeLetter == ActivityType.HOME) {
+            return ActiToppActivityTypes.home.toString();
+        } else if (activityTypeLetter == ActivityType.WORK) {
+            return ActiToppActivityTypes.work.toString();
+        } else if (activityTypeLetter == ActivityType.EDUCATION) {
+            return ActiToppActivityTypes.education.toString();
+        } else if (activityTypeLetter == ActivityType.LEISURE) {
+            return ActiToppActivityTypes.leisure.toString();
+        } else if (activityTypeLetter == ActivityType.SHOPPING) {
+            return ActiToppActivityTypes.shopping.toString();
+        } else if (activityTypeLetter == ActivityType.TRANSPORT) {
+            return ActiToppActivityTypes.other.toString();
+        } else {
+            LOG.error(new IllegalArgumentException("Activity type " + activityTypeLetter + " not allowed."));
+            return null;
         }
     }
 
-    private static ActitoppPerson createActitoppPersonSwitzerland(Person matsimPerson) {
-        int personIndex = Integer.parseInt(matsimPerson.getId().toString());
-        Attributes attr = matsimPerson.getAttributes();
+    public void runActitopp() {
+        Population population = scenario.getPopulation();
+        ActivityFacilities facilities = scenario.getActivityFacilities();
+        for (Person matsimPerson : population.getPersons().values()) {
+            Id<ActivityFacility> facId = Id.create(matsimPerson.getAttributes().getAttribute(IvtPopulationParser.AttributeLabels.facility_id.toString()).toString(), ActivityFacility.class);
+            Coord homeCoord = facilities.getFacilities().get(facId).getCoord();
 
-        int childrenFrom0To10 = getIntFromBoolean((boolean) attr.getAttribute(IvtPopulationParser.AttributeLabels.children_0_10.toString()));
-        int childrenUnder18 = getIntFromBoolean((boolean) attr.getAttribute(IvtPopulationParser.AttributeLabels.children_0_18.toString()));
+            ActitoppPerson actitoppPerson = createActitoppPersonSwitzerland(matsimPerson, homeCoord);
 
-        int age = (int) attr.getAttribute(CEMDAPPersonAttributes.age.toString());
+            HWeekPattern weekPattern = createActitoppWeekPattern(actitoppPerson);
+            Plan matsimPlan = createMatsimPlan(matsimPerson, weekPattern, population, homeCoord);
+            matsimPerson.addPlan(matsimPlan);
+        }
+    }
 
-        // TODO Improve
-        int employment = getEmploymentClassSwitzerland((boolean) attr.getAttribute(IvtPopulationParser.AttributeLabels.employed.toString()));
-        attr.putAttribute(ActitoppAttributeLabels.actitopp_employment_class.toString(), employment);
+    private void prepareObservedCommutes(String countsFile, int beginReprTimePeriod, int endReprTimePeriod) {
+        LOG.info("Start creating map with observed commutes.");
+        Counts commuteCounts = new Counts();
+        MatsimCountsReader countsReader = new MatsimCountsReader(commuteCounts);
+        countsReader.readFile(countsFile);
+        this.observedCommutes = new HashMap<>();
 
-        int gender = getGenderClassSwitzerland(IvtPopulationParser.Gender.valueOf((String) attr.getAttribute(IvtPopulationParser.AttributeLabels.gender.toString())));
-        attr.putAttribute(ActitoppAttributeLabels.actitopp_gender.toString(), gender);
-
-        int areaType = getAreaType(); // TODO
-
-        int numberOfCarsInHousehold = (int) attr.getAttribute(IvtPopulationParser.AttributeLabels.number_of_cars.toString());
-
-        double commutingDistanceToWork = 20.;
-        double commutingDistanceToEducation = 20.;
-
-        ActitoppPerson actitoppPerson = new ActitoppPerson(personIndex, childrenFrom0To10, childrenUnder18, age,
-                employment, gender, areaType, numberOfCarsInHousehold, commutingDistanceToWork,
-                commutingDistanceToEducation);
-        return actitoppPerson;
+        for (Object uncastedCount : commuteCounts.getCounts().values()) {
+            Count count = (Count) uncastedCount;
+            String[] from_to = count.getId().toString().split("_");
+            int from = Integer.parseInt(from_to[0]);
+            int to = Integer.parseInt(from_to[1]);
+            for (Object uncastedVolume : count.getVolumes().values()) {
+                Volume volume = (Volume) uncastedVolume;
+                if (beginReprTimePeriod < volume.getHourOfDayStartingWithOne() && volume.getHourOfDayStartingWithOne() <= endReprTimePeriod) {
+                    double value = volume.getValue();
+                    List<Integer> destinations;
+                    if (!observedCommutes.keySet().contains(from)) {
+                        destinations = new ArrayList<>();
+                        observedCommutes.put(from, destinations);
+                    }
+                    destinations = observedCommutes.get(from);
+                    for (int i = 0; i < value; i++) {
+                        destinations.add(to);
+                    }
+                }
+            }
+        }
     }
 
     private static int getIntFromBoolean(boolean value) {
@@ -100,49 +230,67 @@ public class RunActitoppForIvtPopulation {
                 System.err.println("person involved: " + actitoppPerson.getPersIndex());
             }
         }
-        // actitoppPerson.getWeekPattern().printAllActivitiesList();
         return actitoppPerson.getWeekPattern();
     }
 
-    private static Plan createMatsimPlan(HWeekPattern weekPattern, PopulationFactory populationFactory) {
-        Plan matsimPlan = populationFactory.createPlan();
+    private void createMunicipalityCenterMap(String municipalitiesShapeFile) {
+        LOG.info("Start creating municipality center map.");
+        this.municipalityCenters = new HashMap<>();
 
-        List<HActivity> activityList = weekPattern.getAllActivities();
-        for (HActivity actitoppActivity : activityList) {
-            if (actitoppActivity.getDayIndex() == 0) { // Only use activities of first day; until 1,440min
-                // actitoppActivity.getType(); // Letter-based type
-                actitoppActivity.getActivityType();
-                String matsimActivityType = transformActType(actitoppActivity.getActivityType());
-                Coord dummyCoord = CoordUtils.createCoord(0, 0); // TODO choose location
-
-                Activity matsimActivity = populationFactory.createActivityFromCoord(matsimActivityType, dummyCoord);
-                matsimPlan.addActivity(matsimActivity);
-
-                int activityEndTime_min = actitoppActivity.getEndTime();
-                if (activityEndTime_min <= 24 * 60) { // i.e. midnight in minutes
-                    matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
-
-                    Leg matsimLeg = populationFactory.createLeg(TransportMode.car); // TODO
-                    matsimPlan.addLeg(matsimLeg);
-                }
-            }
+        ShapeFileReader sfr = new ShapeFileReader();
+        for (SimpleFeature sf : sfr.getAllFeatures(municipalitiesShapeFile)) {
+            int municapalityId = Integer.valueOf(sf.getAttribute("GMDNR").toString());
+            int zentrumskoordindateEast = Integer.valueOf(sf.getAttribute("E_CNTR").toString());
+            int zentrumskoordindateNorth = Integer.valueOf(sf.getAttribute("N_CNTR").toString());
+            municipalityCenters.put(municapalityId, CoordUtils.createCoord(zentrumskoordindateEast, zentrumskoordindateNorth));
         }
-        return matsimPlan;
     }
 
-    // Information from "https://github.com/mobitopp/actitopp"
-    // 1 = full-time occupied; 2 = half-time occupied; 3 = not occupied; 4 = student (school or university);
-    // 5 = worker in vocational program; 7 = retired person / pensioner
-    private static int getEmploymentClassSwitzerland(boolean employed) {
-        int employmentClass = -1;
-        if (employed) {
-            employmentClass = 1; // TODO distinguish between full- and half-time occupation
-            // Tim, Michael H. also estimate this in a model for people outside Karlsruhe
-        } else {
-            employmentClass = 3;
+    private ActitoppPerson createActitoppPersonSwitzerland(Person matsimPerson, Coord homeCoord) {
+        // TODO Find out if we should include houeholds here (also ask Tim)
+        int personIndex = Integer.parseInt(matsimPerson.getId().toString());
+        Attributes attr = matsimPerson.getAttributes();
+
+        int childrenFrom0To10 = getIntFromBoolean((boolean) attr.getAttribute(IvtPopulationParser.AttributeLabels.children_0_10.toString()));
+        int childrenUnder18 = getIntFromBoolean((boolean) attr.getAttribute(IvtPopulationParser.AttributeLabels.children_0_18.toString()));
+
+        int age = (int) attr.getAttribute(CEMDAPPersonAttributes.age.toString());
+
+        int employment = getEmploymentClassSwitzerland((boolean) attr.getAttribute(IvtPopulationParser.AttributeLabels.employed.toString()), age); // TODO Substantiate asumptions
+        attr.putAttribute(ActitoppAttributeLabels.actitopp_employment_class.toString(), employment);
+
+        int gender = getGenderClassSwitzerland(IvtPopulationParser.Gender.valueOf((String) attr.getAttribute(IvtPopulationParser.AttributeLabels.gender.toString())));
+        attr.putAttribute(ActitoppAttributeLabels.actitopp_gender.toString(), gender);
+
+        int areaType = getAreaTypeSwitzerland(IvtPopulationParser.MunicipalityType.valueOf((String) attr.getAttribute(IvtPopulationParser.AttributeLabels.municipality_type.toString())));
+        attr.putAttribute(ActitoppAttributeLabels.actitopp_area_type.toString(), areaType);
+
+        int numberOfCarsInHousehold = (int) attr.getAttribute(IvtPopulationParser.AttributeLabels.number_of_cars.toString());
+
+        int homeMunicipality = (int) attr.putAttribute(IvtPopulationParser.AttributeLabels.municipality_id.toString(), employment);
+        int destination;
+        double commutingDistanceToWork = 0;
+        double commutingDistanceToEducation = 0; // TODO
+
+        // 1 = full-time occupied; 2 = half-time occupied; 3 = not occupied; 4 = student (school or university);
+        // 5 = worker in vocational program; 7 = retired person / pensioner
+        if (employment == 1 || employment == 2 || employment == 4 || employment == 5) {
+            List<Integer> outgoingCommutes = observedCommutes.get(homeMunicipality);
+            int randomInt = random.nextInt(outgoingCommutes.size());
+            destination = outgoingCommutes.get(randomInt);
+            outgoingCommutes.remove(randomInt);
+            if (employment == 1 || employment == 2 || employment == 5) {
+                commutingDistanceToWork = getCommutingDistance(homeCoord, destination);
+                attr.putAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString(), destination);
+            } else if (employment == 4) {
+                commutingDistanceToEducation = getCommutingDistance(homeCoord, destination);
+                attr.putAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString(), destination);
+            }
         }
-        // TODO "worker in vocational program", "student", and "retired person / pensioner" are not yet considered
-        return employmentClass;
+
+        ActitoppPerson actitoppPerson = new ActitoppPerson(personIndex, childrenFrom0To10, childrenUnder18, age,
+                employment, gender, areaType, numberOfCarsInHousehold, commutingDistanceToWork, commutingDistanceToEducation);
+        return actitoppPerson;
     }
 
     // Information from "https://github.com/mobitopp/actitopp"
@@ -164,55 +312,66 @@ public class RunActitoppForIvtPopulation {
         return genderClass;
     }
 
-    // PKW-Besitzquote pro Gemeinde
-    private static int getNumberOfCarsInHousehold() {
-        return 0;
-    }
+    private double getCommutingDistance(Coord homeCoord, int destination) {
+        double distance = 0.;
+        Node homeNode = NetworkUtils.getNearestNode(scenario.getNetwork(), homeCoord);
+        Node destinationNode = NetworkUtils.getNearestNode(scenario.getNetwork(), municipalityCenters.get(destination));
 
-    // Information from "https://github.com/mobitopp/actitopp"
-    // 1 = rural; 2 = provincial; 3 = cityoutskirt; 4 = metropolitan; 5 = conurbation
-    // 5 = >500000 im Regionkern
-    // 4 = 50000-500000 im Regionskern
-    // 3 = >50000 am Regionsrand
-    // 2 = 5000-50000
-    // 1 = < 5000
-    // Based on BIK regions, cf. MOP
-    private static int getAreaType() {
-        // TODO Right now everybody is "metropolitan"
-        return 4;
-    }
-
-    // Information from "https://github.com/mobitopp/actitopp"
-    // Commuting distance to work in kilometers (0 if non existing) or commuting distance to school/university in kilometers (0 if non existing)
-    private static double getDistanceEstimate(int householdId, int destinationZoneId) {
-        // TODO Right now everybody makes trips of 5 kilometers
-        return 5.;
-    }
-
-    // Information from "https://github.com/mobitopp/actitopp/blob/master/src/main/java/edu/kit/ifv/mobitopp/actitopp/Configuration.java"
-    private static String transformActType(ActivityType activityTypeLetter) {
-        if (activityTypeLetter == ActivityType.HOME) {
-            return DefaultActivityTypes.home;
-        } else if (activityTypeLetter == ActivityType.WORK) {
-            return DefaultActivityTypes.work;
-        } else if (activityTypeLetter == ActivityType.EDUCATION) {
-            return ActiToppActivityTypes.education.toString();
-        } else if (activityTypeLetter == ActivityType.LEISURE) {
-            return ActiToppActivityTypes.leisure.toString();
-        } else if (activityTypeLetter == ActivityType.SHOPPING) {
-            return ActiToppActivityTypes.shopping.toString();
-        } else if (activityTypeLetter == ActivityType.TRANSPORT) {
-            return ActiToppActivityTypes.other.toString();
-        } else {
-            LOG.error(new IllegalArgumentException("Activity type " + activityTypeLetter + " not allowed."));
-            return null;
+        LeastCostPathCalculator.Path path = leastCostPathCalculator.calcLeastCostPath(
+                homeNode, destinationNode, 8 * 60. * 60., null, null);
+        for (Link link : path.links) {
+            distance += link.getLength();
         }
+        return distance / 1000.;
     }
 
-    private static void writeMatsimPlansFile(Population population, String fileName) {
+    private Plan createMatsimPlan(Person matsimPerson, HWeekPattern weekPattern, Population population, Coord homeCoord) {
+        PopulationFactory populationFactory = population.getFactory();
+        Plan matsimPlan = populationFactory.createPlan();
+
+        List<HActivity> activityList = weekPattern.getAllActivities();
+        for (HActivity actitoppActivity : activityList) {
+            if (actitoppActivity.getDayIndex() == 0) { // Only use activities of first day; until 1,440min
+                // actitoppActivity.getType(); // Letter-based type
+                actitoppActivity.getActivityType();
+                String matsimActivityType = transformActType(actitoppActivity.getActivityType());
+                Coord coord;
+                if (matsimActivityType.equals(ActiToppActivityTypes.home.toString())) {
+                    coord = homeCoord;
+                } else if (matsimActivityType.equals(ActiToppActivityTypes.work.toString()) || matsimActivityType.equals(ActiToppActivityTypes.education.toString())) {
+                    if (matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString()) != null) {
+                        int workEduMunId = (int) matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString());
+                        coord = municipalityCenters.get(workEduMunId); // TODO Use random coord in zone rather than zone center
+                    } else { // This the case when someone performs a work or education activity who is not expected so based on his employment status
+                        int homeMunId = (int) matsimPerson.getAttributes().getAttribute(IvtPopulationParser.AttributeLabels.municipality_id.toString());
+                        coord = municipalityCenters.get(homeMunId);
+                    }
+                } else {
+                    coord = null;
+                }
+
+                Activity matsimActivity = populationFactory.createActivityFromCoord(matsimActivityType, coord);
+                matsimPlan.addActivity(matsimActivity);
+
+                int activityEndTime_min = actitoppActivity.getEndTime();
+                if (activityEndTime_min <= 24 * 60) { // i.e. midnight in minutes
+                    matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
+
+                    Leg matsimLeg = populationFactory.createLeg(TransportMode.car); // TODO
+                    matsimPlan.addLeg(matsimLeg);
+                }
+            }
+        }
+        return matsimPlan;
+    }
+
+    private void writeMatsimPlansFile(Population population, String fileName) {
         PopulationWriter popWriter = new PopulationWriter(population);
         popWriter.write(fileName);
     }
 
-    enum ActitoppAttributeLabels {actitopp_employment_class, actitopp_gender, actitopp_area_type}
+    enum ActitoppAttributeLabels {
+        actitopp_employment_class, actitopp_gender, actitopp_area_type,
+        work_edu_municipality_id
+    }
 }
