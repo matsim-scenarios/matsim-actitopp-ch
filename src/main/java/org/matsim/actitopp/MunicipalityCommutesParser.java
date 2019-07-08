@@ -67,7 +67,7 @@ public class MunicipalityCommutesParser {
         commuteMatrixParser.setCantonsIncluded(cantonsIncluded);
         commuteMatrixParser.setMunicipalityUpdater(inputFileMunicipalityUpdates, idLabelOld, idLabelNew, nameLabelOld, nameLabelNew);
 
-        Counts commuteCounts = commuteMatrixParser.createCommuteCounts(inputFileMatrix);
+        Counts commuteCounts = commuteMatrixParser.createCommuteCounts(inputFileMatrix, "commuteCounts", 20161001);
         commuteMatrixParser.scaleCounts(commuteCounts, sampleSize);
         commuteMatrixParser.writeCommuteCounts(commuteCounts, outputFileCommuteCounts);
     }
@@ -99,9 +99,11 @@ public class MunicipalityCommutesParser {
         }
     }
 
-    public Counts createCommuteCounts(Path inputFile) {
+    public Counts createCommuteCounts(Path inputFile, String name, int dateTag) {
         LOG.info("Start creating commute counts.");
         Counts commuteCounts = new Counts();
+        commuteCounts.setName(name);
+        commuteCounts.setYear(dateTag);
 
         try (CSVParser parser = CSVParser.parse(inputFile, StandardCharsets.UTF_8, CSVFormat.newFormat(',').withFirstRecordAsHeader())) {
             for (CSVRecord record : parser) {
