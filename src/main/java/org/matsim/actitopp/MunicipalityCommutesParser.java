@@ -208,6 +208,6 @@ public class MunicipalityCommutesParser {
     private class Canton {
     }
 
-    private class Municipality {
+    class Municipality {
     }
 }
