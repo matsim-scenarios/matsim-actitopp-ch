@@ -73,7 +73,7 @@ public class RunActitoppForIvtPopulation {
         int beginReprTimePeriod = 6;
         int endReprTimePeriod = 10;
 
-        String populationScheduleFile = folderRoot + "population_1pct_plans.xml.gz";
+        String populationScheduleFile = folderRoot + "population_1pct_plans_initial-coords.xml.gz";
 
         // Create scenario
         MutableScenario scenario = ScenarioUtils.createMutableScenario(ConfigUtils.createConfig());
@@ -302,7 +302,7 @@ public class RunActitoppForIvtPopulation {
             genderClass = 1;
         } else if (IvtPopulationParser.Gender.female == gender) {
             genderClass = 2;
-        } else if (IvtPopulationParser.Gender.female == gender) {
+        } else if (IvtPopulationParser.Gender.unspecified == gender) {
             if (random.nextDouble() > 0.5) {
                 genderClass = 1; // male
             } else {
@@ -347,7 +347,7 @@ public class RunActitoppForIvtPopulation {
                         coord = municipalityCenters.get(homeMunId);
                     }
                 } else {
-                    coord = null;
+                    coord = homeCoord; // Just as an initial guess
                 }
 
                 Activity matsimActivity = populationFactory.createActivityFromCoord(matsimActivityType, coord);
