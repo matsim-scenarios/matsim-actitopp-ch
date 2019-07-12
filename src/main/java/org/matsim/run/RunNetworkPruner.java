@@ -2,6 +2,7 @@ package org.matsim.run;
 
 import edu.kit.ifv.mobitopp.actitopp.*;
 import org.apache.log4j.Logger;
+import org.jfree.util.Log;
 import org.matsim.actitopp.ActiToppActivityTypes;
 import org.matsim.actitopp.IvtPopulationParser;
 import org.matsim.api.core.v01.Coord;
@@ -98,19 +99,19 @@ public class RunNetworkPruner {
             }
         }
 
-        System.out.println("Pruning " + tooSmall + " minor links ");
-        System.out.println("Pruning " + outsideBoundingBox + " links outside bounding box");
+        Log.info("Pruning " + tooSmall + " minor links ");
+        Log.info("Pruning " + outsideBoundingBox + " links outside bounding box");
 
         for (Link l: pruneList) {
             network.removeLink(l.getId());
         }
 
-        System.out.println("Running NetworkCleaner");
+        Log.info("Running NetworkCleaner");
 
         NetworkCleaner nc = new NetworkCleaner();
         nc.run(network);
 
-        System.out.println(("Writing " + prunedNetworkFile));
+        Log.info("Writing " + prunedNetworkFile);
         new NetworkWriter(network).write(prunedNetworkFile);
     }
 }
