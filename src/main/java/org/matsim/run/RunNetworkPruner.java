@@ -80,6 +80,13 @@ public class RunNetworkPruner {
 
             Coord coord = link.getFromNode().getCoord();
             if (coord.getX() < lowerx || coord.getX() > upperx || coord.getY() < lowery || coord.getY() > uppery) {
+
+                // well, let's not prune highways outside the box
+                Object linkType = link.getAttributes().getAttribute("osm:way:highway");
+                if (linkType==null) continue;
+                if (linkType.toString().equals("motorway")) continue;
+                if (linkType.toString().equals("primary")) continue;
+
                 pruneList.add(link);
                 outsideBoundingBox++;
             }
@@ -99,19 +106,19 @@ public class RunNetworkPruner {
             }
         }
 
-        Log.info("Pruning " + tooSmall + " minor links ");
-        Log.info("Pruning " + outsideBoundingBox + " links outside bounding box");
+        LOG.info("Pruning " + tooSmall + " minor links ");
+        LOG.info("Pruning " + outsideBoundingBox + " links outside bounding box");
 
         for (Link l: pruneList) {
             network.removeLink(l.getId());
         }
 
-        Log.info("Running NetworkCleaner");
+        LOG.info("Running NetworkCleaner");
 
         NetworkCleaner nc = new NetworkCleaner();
         nc.run(network);
 
-        Log.info("Writing " + prunedNetworkFile);
+        LOG.info("Writing " + prunedNetworkFile);
         new NetworkWriter(network).write(prunedNetworkFile);
     }
 }
