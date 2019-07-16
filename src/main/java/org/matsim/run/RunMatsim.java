@@ -39,6 +39,8 @@ import org.matsim.core.config.groups.VspExperimentalConfigGroup;
 import org.matsim.core.controler.AbstractModule;
 import org.matsim.core.controler.Controler;
 import org.matsim.core.controler.OutputDirectoryHierarchy.OverwriteFileSetting;
+import org.matsim.core.controler.events.StartupEvent;
+import org.matsim.core.controler.listener.StartupListener;
 import org.matsim.core.gbl.Gbl;
 import org.matsim.core.gbl.MatsimRandom;
 import org.matsim.core.network.NetworkUtils;
@@ -47,10 +49,7 @@ import org.matsim.core.replanning.strategies.DefaultPlanStrategiesModule;
 import org.matsim.core.replanning.strategies.DefaultPlanStrategiesModule.DefaultSelector;
 import org.matsim.core.scenario.MutableScenario;
 import org.matsim.core.scenario.ScenarioUtils;
-import org.matsim.facilities.ActivityFacilities;
-import org.matsim.facilities.ActivityFacilitiesFactory;
-import org.matsim.facilities.ActivityFacility;
-import org.matsim.facilities.ActivityOption;
+import org.matsim.facilities.*;
 
 import java.util.*;
 
@@ -71,9 +70,12 @@ public class RunMatsim {
 		RunType runType = RunType.shortRun ;
 		// yy not sure if it makes sense to keep the short/med/longRun differentiation at this level.  kai, jun'19
 
+		System.setProperty("matsim.preferLocalDtds", "true") ;
+
 		Config config = ConfigUtils.loadConfig( "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/config.xml" );
 
-		config.network().setInputFile( "../transport_supply/switzerland_network.xml.gz" );
+//		config.network().setInputFile( "../transport_supply/switzerland_network.xml.gz" );
+		config.network().setInputFile( "pruned_neuenburg_network.xml.gz" );
 		config.plans().setInputFile( "population_1pct_plans_initial-coords.xml.gz" );
 		config.facilities().setInputFile( "facilities_1pct.xml.gz" );
 
@@ -212,6 +214,11 @@ public class RunMatsim {
 		controler.addOverridingModule( new AbstractModule(){
 			@Override public void install(){
 				addControlerListenerBinding().to( KaiAnalysisListener.class ).in( Singleton.class ) ;
+				addControlerListenerBinding().toInstance( (StartupListener) event -> {
+					NetworkUtils.writeNetwork( scenario.getNetwork(), config.controler().getOutputDirectory() + "/input_network.xml.gz" );
+					new FacilitiesWriter( scenario.getActivityFacilities() ).write( config.controler().getOutputDirectory() + "/input_facilities.xml.gz" );
+					// so I have this things in the output directory if the run crashes.  kai, jul'19
+				} );
 			}
 		} ) ;
 
