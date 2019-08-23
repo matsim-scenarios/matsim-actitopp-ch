@@ -2,6 +2,7 @@ package org.matsim.actitopp;
 
 import edu.kit.ifv.mobitopp.actitopp.*;
 import org.apache.log4j.Logger;
+import org.locationtech.jts.geom.Point;
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.Scenario;
@@ -22,6 +23,7 @@ import org.matsim.core.router.util.LeastCostPathCalculator;
 import org.matsim.core.scenario.MutableScenario;
 import org.matsim.core.scenario.ScenarioUtils;
 import org.matsim.core.utils.geometry.CoordUtils;
+import org.matsim.core.utils.geometry.GeometryUtils;
 import org.matsim.core.utils.gis.ShapeFileReader;
 import org.matsim.counts.Count;
 import org.matsim.counts.Counts;
@@ -43,22 +45,28 @@ public class RunActitoppForIvtPopulation {
     private static final Logger LOG = Logger.getLogger(RunActitoppForIvtPopulation.class);
     private static ModelFileBase fileBase = new ModelFileBase();
     private static RNGHelper randomgenerator = new RNGHelper(1234);
+	private final HashMap<Integer, SimpleFeature> mmm = new HashMap<>(  ) ;
 
-    Map<Integer, Coord> municipalityCenters;
+	Map<Integer, Coord> municipalityCenters;
     Random random = MatsimRandom.getLocalInstance();
     LeastCostPathCalculator leastCostPathCalculator;
     private Scenario scenario;
-    private Map<Integer, List<Integer>> observedCommutes;
+	private Map<Integer, List<Integer>> observedCommutes;
 
     public RunActitoppForIvtPopulation(Scenario scenario, String municipalitiesShapeFile, String countsFile,
-                                       int beginReprTimePeriod, int endReprTimePeriod) {
-        this.scenario = scenario;
+                                       int beginReprTimePeriod, int endReprTimePeriod){
+	    this.scenario = scenario;
 
-        prepareObservedCommutes(countsFile, beginReprTimePeriod, endReprTimePeriod);
-        createMunicipalityCenterMap(municipalitiesShapeFile);
+	    prepareObservedCommutes( countsFile, beginReprTimePeriod, endReprTimePeriod );
+	    createMunicipalityCenterMap( municipalitiesShapeFile );
 
-        FreespeedTravelTimeAndDisutility freeSpeed = new FreespeedTravelTimeAndDisutility(scenario.getConfig().planCalcScore());
-        leastCostPathCalculator = (new FastDijkstraFactory()).createPathCalculator(scenario.getNetwork(), freeSpeed, freeSpeed);
+	    FreespeedTravelTimeAndDisutility freeSpeed = new FreespeedTravelTimeAndDisutility( scenario.getConfig().planCalcScore() );
+	    leastCostPathCalculator = (new FastDijkstraFactory()).createPathCalculator( scenario.getNetwork(), freeSpeed, freeSpeed );
+
+	    for( SimpleFeature feature : ShapeFileReader.getAllFeatures( municipalitiesShapeFile ) ){
+		    int municapalityId = Integer.valueOf(feature.getAttribute("GMDNR").toString());
+		    mmm.put( municapalityId, feature ) ;
+	    }
     }
 
     public static void main(String[] args) {
@@ -341,10 +349,15 @@ public class RunActitoppForIvtPopulation {
                 } else if (matsimActivityType.equals(ActiToppActivityTypes.work.toString()) || matsimActivityType.equals(ActiToppActivityTypes.education.toString())) {
                     if (matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString()) != null) {
                         int workEduMunId = (int) matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString());
-                        coord = municipalityCenters.get(workEduMunId); // TODO Use random coord in zone rather than zone center
+//                        coord = municipalityCenters.get(workEduMunId); // TODO Use random coord in zone rather than zone center
+				  Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( workEduMunId ) );;
+				  coord = new Coord( point.getX(), point.getY() ) ;
                     } else { // This the case when someone performs a work or education activity who is not expected so based on his employment status
                         int homeMunId = (int) matsimPerson.getAttributes().getAttribute(IvtPopulationParser.AttributeLabels.municipality_id.toString());
                         coord = municipalityCenters.get(homeMunId);
+                        if ( true ) {
+                        	throw new RuntimeException("thie above needs tob etested") ;
+				}
                     }
                 } else {
                     coord = homeCoord; // Just as an initial guess
