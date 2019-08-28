@@ -71,13 +71,13 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
+        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
-        String networkFile = "../../svn/shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
+        String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
 
-        String municipalitiesShapeFile = "../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
-        String countsFile = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
+        String municipalitiesShapeFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
+        String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
         int beginReprTimePeriod = 6;
         int endReprTimePeriod = 10;
 

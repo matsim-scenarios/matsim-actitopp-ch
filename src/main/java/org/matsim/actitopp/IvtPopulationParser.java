@@ -243,7 +243,7 @@ public class IvtPopulationParser {
     }
 
     private static ActivityFacility addOrGetFacility(ActivityFacilities facilities, Id<Household> householdId, Coord coord) {
-        ActivityFacility facility = null;
+        ActivityFacility facility;
         Id<ActivityFacility> facilityId = Id.create(householdId, ActivityFacility.class);
         if (!facilities.getFacilities().containsKey(facilityId)) {
             facility = facilities.getFactory().createActivityFacility(facilityId, coord);
