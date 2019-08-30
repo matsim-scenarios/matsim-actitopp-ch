@@ -86,6 +86,8 @@ public class RunNetworkPruner {
                 if (linkType==null) continue;
                 if (linkType.toString().equals("motorway")) continue;
                 if (linkType.toString().equals("primary")) continue;
+                if (linkType.toString().equals("primary_link")) continue;
+                if (linkType.toString().equals("motorway_link")) continue;
 
                 pruneList.add(link);
                 outsideBoundingBox++;
