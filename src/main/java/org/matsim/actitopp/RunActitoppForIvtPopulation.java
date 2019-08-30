@@ -71,13 +71,13 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
+        String folderRoot = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
-        String networkFile = "../../svn/shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
+        String networkFile = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
 
-        String municipalitiesShapeFile = "../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
-        String countsFile = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
+        String municipalitiesShapeFile = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
+        String countsFile = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
         int beginReprTimePeriod = 6;
         int endReprTimePeriod = 10;
 
@@ -349,15 +349,14 @@ public class RunActitoppForIvtPopulation {
                 } else if (matsimActivityType.equals(ActiToppActivityTypes.work.toString()) || matsimActivityType.equals(ActiToppActivityTypes.education.toString())) {
                     if (matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString()) != null) {
                         int workEduMunId = (int) matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString());
-//                        coord = municipalityCenters.get(workEduMunId); // TODO Use random coord in zone rather than zone center
-				  Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( workEduMunId ) );;
-				  coord = new Coord( point.getX(), point.getY() ) ;
+                        // coord = municipalityCenters.get(workEduMunId); // Don't use municipality center anymore; pick a random point within the municipality.
+                        Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( workEduMunId ) );;
+                        coord = new Coord( point.getX(), point.getY() ) ;
                     } else { // This the case when someone performs a work or education activity who is not expected so based on his employment status
                         int homeMunId = (int) matsimPerson.getAttributes().getAttribute(IvtPopulationParser.AttributeLabels.municipality_id.toString());
-                        coord = municipalityCenters.get(homeMunId);
-                        if ( true ) {
-                        	throw new RuntimeException("thie above needs tob etested") ;
-				}
+                        // coord = municipalityCenters.get(homeMunId);  // ^^ same
+                        Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( homeMunId ) );;
+                        coord = new Coord( point.getX(), point.getY() ) ;
                     }
                 } else {
                     coord = homeCoord; // Just as an initial guess
