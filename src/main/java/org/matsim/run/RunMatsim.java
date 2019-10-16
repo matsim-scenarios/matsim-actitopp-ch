@@ -72,14 +72,14 @@ public class RunMatsim {
 
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		Config config = ConfigUtils.loadConfig( "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/config.xml" );
+		Config config = ConfigUtils.loadConfig( "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/config.xml" );
 
 //		config.network().setInputFile( "../transport_supply/switzerland_network.xml.gz" );
-		config.network().setInputFile( "pruned_neuenburg_network.xml.gz" );
+		config.network().setInputFile( "pruned_full_ch_network.xml.gz" );
 		config.plans().setInputFile( "population_1pct_plans_initial-coords.xml.gz" );
 		config.facilities().setInputFile( "facilities_1pct.xml.gz" );
 
-		config.global().setNumberOfThreads( 8 );
+		config.global().setNumberOfThreads( 4 );
 
 		switch( runType ) {
 			case shortRun:

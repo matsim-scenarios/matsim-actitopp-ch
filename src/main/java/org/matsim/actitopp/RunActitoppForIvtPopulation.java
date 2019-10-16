@@ -71,15 +71,16 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
+        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
-        String networkFile = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
+        String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
+        // String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/pruned_full_ch_network.xml.gz";
 
-        String municipalitiesShapeFile = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
-        String countsFile = "/C:/Users/billy/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
+        String municipalitiesShapeFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
+        String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_full_ch_2018_1pct.xml.gz";
         int beginReprTimePeriod = 6;
-        int endReprTimePeriod = 10;
+        int endReprTimePeriod = 11;
 
         String populationScheduleFile = folderRoot + "population_1pct_plans_initial-coords.xml.gz";
 
@@ -284,9 +285,15 @@ public class RunActitoppForIvtPopulation {
         // 5 = worker in vocational program; 7 = retired person / pensioner
         if (employment == 1 || employment == 2 || employment == 4 || employment == 5) {
             List<Integer> outgoingCommutes = observedCommutes.get(homeMunicipality);
-            int randomInt = random.nextInt(outgoingCommutes.size());
-            destination = outgoingCommutes.get(randomInt);
-            outgoingCommutes.remove(randomInt);
+            if (outgoingCommutes.isEmpty()) {
+                LOG.warn("HomeMunicipality Commutes is now zero: Home Municipality " + homeMunicipality);
+                destination = homeMunicipality;
+            } else {
+                int randomInt = random.nextInt(outgoingCommutes.size());
+                destination = outgoingCommutes.get(randomInt);
+                outgoingCommutes.remove(randomInt);
+            }
+
             if (employment == 1 || employment == 2 || employment == 5) {
                 commutingDistanceToWork = getCommutingDistance(homeCoord, destination);
                 attr.putAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString(), destination);
@@ -327,6 +334,13 @@ public class RunActitoppForIvtPopulation {
 
         LeastCostPathCalculator.Path path = leastCostPathCalculator.calcLeastCostPath(
                 homeNode, destinationNode, 8 * 60. * 60., null, null);
+
+        if (path == null) {
+
+            return 0;  // yyyyyy
+        }
+
+
         for (Link link : path.links) {
             distance += link.getLength();
         }
