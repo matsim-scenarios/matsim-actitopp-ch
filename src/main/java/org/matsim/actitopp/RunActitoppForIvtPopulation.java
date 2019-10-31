@@ -71,11 +71,11 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
+        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
         String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
-        // String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/pruned_full_ch_network.xml.gz";
+        // String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/pruned_full_ch_network.xml.gz";
 
         String municipalitiesShapeFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
         String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_full_ch_2018_1pct.xml.gz";
@@ -285,13 +285,13 @@ public class RunActitoppForIvtPopulation {
         // 5 = worker in vocational program; 7 = retired person / pensioner
         if (employment == 1 || employment == 2 || employment == 4 || employment == 5) {
             List<Integer> outgoingCommutes = observedCommutes.get(homeMunicipality);
+
             if (outgoingCommutes.isEmpty()) {
-                LOG.warn("HomeMunicipality Commutes is now zero: Home Municipality " + homeMunicipality);
                 destination = homeMunicipality;
+                LOG.warn("No observed commutes: Person ID " + personIndex + "; Home Municipality " + homeMunicipality);
             } else {
                 int randomInt = random.nextInt(outgoingCommutes.size());
-                destination = outgoingCommutes.get(randomInt);
-                outgoingCommutes.remove(randomInt);
+                destination = outgoingCommutes.get(randomInt);  // don't remove the choices as we pull them.
             }
 
             if (employment == 1 || employment == 2 || employment == 5) {
@@ -352,8 +352,13 @@ public class RunActitoppForIvtPopulation {
         Plan matsimPlan = populationFactory.createPlan();
 
         List<HActivity> activityList = weekPattern.getAllActivities();
+
+        Leg matsimLeg = null;
         for (HActivity actitoppActivity : activityList) {
             if (actitoppActivity.getDayIndex() == 0) { // Only use activities of first day; until 1,440min
+                // add the previously-built leg, if it exists.
+                if (matsimLeg != null) matsimPlan.addLeg(matsimLeg);
+
                 // actitoppActivity.getType(); // Letter-based type
                 actitoppActivity.getActivityType();
                 String matsimActivityType = transformActType(actitoppActivity.getActivityType());
@@ -380,12 +385,10 @@ public class RunActitoppForIvtPopulation {
                 matsimPlan.addActivity(matsimActivity);
 
                 int activityEndTime_min = actitoppActivity.getEndTime();
-                if (activityEndTime_min <= 24 * 60) { // i.e. midnight in minutes
-                    matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
+                matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
 
-                    Leg matsimLeg = populationFactory.createLeg(TransportMode.car); // TODO
-                    matsimPlan.addLeg(matsimLeg);
-                }
+                // The following leg will be inserted just before the NEXT activity (if there is a next activity)
+                matsimLeg = populationFactory.createLeg(TransportMode.car); // TODO
             }
         }
         return matsimPlan;
