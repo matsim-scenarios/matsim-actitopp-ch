@@ -67,19 +67,27 @@ public class RunMatsim {
 	enum RunType { shortRun, medRun, longRun }
 
 	public static void main(String[] args) {
-		RunType runType = RunType.shortRun ;
+	    String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
+
+	    String populationScheduleFile = "population_1pct_plans_initial-coords.xml.gz";
+		// String populationScheduleFile = "trimmed.xml.gz";
+
+	    RunType runType = RunType.shortRun ;
 		// yy not sure if it makes sense to keep the short/med/longRun differentiation at this level.  kai, jun'19
 
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		Config config = ConfigUtils.loadConfig( "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/config.xml" );
-
-//		config.network().setInputFile( "../transport_supply/switzerland_network.xml.gz" );
-		config.network().setInputFile( "pruned_full_ch_network.xml.gz" );
-		config.plans().setInputFile( "population_1pct_plans_initial-coords.xml.gz" );
+		Config config = ConfigUtils.loadConfig(  folderRoot + "config.xml" );
+		config.network().setInputFile( "../transport_supply/switzerland_network.xml.gz" );
+// 		config.network().setInputFile( "pruned_full_ch_network.xml.gz" );
+		config.plans().setInputFile(populationScheduleFile);
 		config.facilities().setInputFile( "facilities_1pct.xml.gz" );
 
 		config.global().setNumberOfThreads( 4 );
+
+		// Janek says to use 0.012 for 1% scenario
+		config.qsim().setFlowCapFactor(0.012);
+		config.qsim().setStorageCapFactor(0.012);
 
 		switch( runType ) {
 			case shortRun:
@@ -190,7 +198,7 @@ public class RunMatsim {
 		Random rnd = MatsimRandom.getLocalInstance();;
 		final ActivityFacilities facilities = scenario.getActivityFacilities();
 		ActivityFacilitiesFactory ff = facilities.getFactory();;
-		for( ActivityFacility facility : facilities.getFacilities().values() ){
+		for( ActivityFacility facility : facilities.getFacilities().values()) {
 			double rrr = rnd.nextDouble();;
 			if ( rrr < 0.33 ) {
 				ActivityOption option = ff.createActivityOption( "shopping" ) ;

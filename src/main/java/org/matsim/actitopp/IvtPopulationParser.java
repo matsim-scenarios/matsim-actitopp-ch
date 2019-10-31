@@ -63,7 +63,7 @@ public class IvtPopulationParser {
     public static void main(String[] args) {
         // TODO try to use gzipped file
         Path inputFile = Paths.get("../../shared-svn/projects/snf-big-data/data/original_files/ivt_syn_pop/population.csv");
-        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
+        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
         double sampleSize = 0.01;
         List<Integer> cantonsIncluded = null; // Arrays.asList(24); // 24 = Neuenburg
 
