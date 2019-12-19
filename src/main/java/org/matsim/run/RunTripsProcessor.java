@@ -18,59 +18,31 @@
  * *********************************************************************** */
 package org.matsim.run;
 
-import com.google.inject.Singleton;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
-import org.matsim.api.core.v01.Scenario;
-import org.matsim.api.core.v01.TransportMode;
 import org.matsim.api.core.v01.events.*;
 import org.matsim.api.core.v01.events.handler.*;
 import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.network.Network;
 import org.matsim.api.core.v01.network.Node;
-import org.matsim.api.core.v01.population.*;
-import org.matsim.contrib.analysis.kai.KaiAnalysisListener;
-import org.matsim.contrib.locationchoice.frozenepsilons.FrozenTastes;
-import org.matsim.contrib.locationchoice.frozenepsilons.FrozenTastesConfigGroup;
-import org.matsim.contrib.locationchoice.frozenepsilons.FrozenTastesConfigGroup.Algotype;
-import org.matsim.contrib.locationchoice.frozenepsilons.FrozenTastesConfigGroup.ApproximationLevel;
 import org.matsim.core.api.experimental.events.EventsManager;
-import org.matsim.core.api.internal.MatsimNetworkObject;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
-import org.matsim.core.controler.AbstractModule;
-import org.matsim.core.controler.Controler;
-import org.matsim.core.controler.OutputDirectoryHierarchy.OverwriteFileSetting;
-import org.matsim.core.controler.listener.StartupListener;
 import org.matsim.core.events.EventsUtils;
 import org.matsim.core.events.MatsimEventsReader;
-import org.matsim.core.gbl.Gbl;
-import org.matsim.core.gbl.MatsimRandom;
 import org.matsim.core.network.NetworkUtils;
-import org.matsim.core.network.algorithms.TransportModeNetworkFilter;
 import org.matsim.core.network.io.MatsimNetworkReader;
-import org.matsim.core.replanning.strategies.DefaultPlanStrategiesModule.DefaultSelector;
-import org.matsim.core.scenario.MutableScenario;
-import org.matsim.core.scenario.ScenarioUtils;
-import org.matsim.core.utils.geometry.CoordinateTransformation;
+import org.matsim.core.utils.geometry.CoordUtils;
 import org.matsim.core.utils.geometry.transformations.CH1903LV03PlustoWGS84;
-import org.matsim.facilities.*;
-import org.matsim.vehicles.Vehicle;
 
-import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
-
-import static org.matsim.core.config.groups.PlanCalcScoreConfigGroup.ActivityParams;
-import static org.matsim.core.config.groups.StrategyConfigGroup.StrategySettings;
-import static org.matsim.core.config.groups.VspExperimentalConfigGroup.VspDefaultsCheckingLevel;
 
 /**
  * @author bcharlton
@@ -79,7 +51,7 @@ import static org.matsim.core.config.groups.VspExperimentalConfigGroup.VspDefaul
 public class RunTripsProcessor {
 	public static final Logger log = Logger.getLogger( RunTripsProcessor.class ) ;
 	public static int MAX_TRIPS = 15000000;
-	public static int START_TIME_SECONDS = 8 * 3600; // 8am
+	public static int START_TIME_SECONDS = 0; // 8 * 3600; // 8am
 
 	public static void main(String[] args) throws Exception {
 		Config config = ConfigUtils.createConfig();
@@ -87,9 +59,10 @@ public class RunTripsProcessor {
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
 
-		String eventsFile = "output_events.xml.gz";
-		String networkFile = "./output_network.xml.gz";
-		String outputFile = "./trips.json";
+		String eventsFile = "ivt-output_events.xml.gz";
+		String networkFile = "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
+		String outputJsonFile = "./ivt-trips.json";
+		String outputCSVFile = "./ivt-trips.csv";
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
@@ -100,7 +73,7 @@ public class RunTripsProcessor {
 		System.out.println("###--- Network file read!");
 
 		//create the handler and add it
-		MyTripHandler handler1 = new MyTripHandler(network, outputFile);
+		MyTripHandler handler1 = new MyTripHandler(network, outputJsonFile, outputCSVFile);
 		events.addHandler(handler1);
 
 		//create the reader and read the file
@@ -112,204 +85,246 @@ public class RunTripsProcessor {
 		handler1.closeWriter();
 		System.out.println("###--- JSON written!");
 	}
-}
 
-class MyTripHandler implements LinkEnterEventHandler,
-		LinkLeaveEventHandler, VehicleEntersTrafficEventHandler, VehicleLeavesTrafficEventHandler,
-		ActivityStartEventHandler {
+	static class MyTripHandler implements LinkEnterEventHandler,
+			LinkLeaveEventHandler, VehicleEntersTrafficEventHandler, VehicleLeavesTrafficEventHandler,
+			ActivityStartEventHandler {
 
-	MyTripHandler(Network network, String output) throws Exception {
-		this.network = network;
-		this.writer = new BufferedWriter(new FileWriter(output));
-		this.writer.write("[\n");
-	}
+		MyTripHandler(Network network, String outputJson, String outputCSV) throws Exception {
+			this.network = network;
+			this.jsonWriter = new BufferedWriter(new FileWriter(outputJson));
+			this.jsonWriter.write("[\n");
 
-	private Network network;
-	private BufferedWriter writer;
-
-	private int counter = 0;
-	private boolean isFirst = true;
-
-	private Map<String, JSONObject> vehicles = new HashMap<>();
-	private CH1903LV03PlustoWGS84 coordConverter = new CH1903LV03PlustoWGS84();
-
-	void addEvent(String vehicleId, Node node, double timestamp) {
-
-		double faketime = timestamp - RunTripsProcessor.START_TIME_SECONDS;
-
-		JSONObject v = vehicles.get(vehicleId);
-		JSONArray wgs84 = this.convertToWGS84(node);
-
-		JSONArray path = ((JSONArray)v.get("path"));
-		JSONArray timestamps = ((JSONArray)v.get("timestamps"));
-
-		// don't add duplicate nodes
-		int index = path.size() - 1;
-		if (index > -1 &&
-			((JSONArray)path.get(index)).get(0).equals(wgs84.get(0)) &&
-			((JSONArray)path.get(index)).get(1).equals(wgs84.get(1)) &&
-			(double) timestamps.get(index) == faketime
-		) return;
-
-		((JSONArray)v.get("path")).add(wgs84);
-		((JSONArray)v.get("timestamps")).add(faketime);
-	}
-
-
-	JSONArray convertToWGS84(Node node) {
-		Coord c = node.getCoord();
-		Coord wgs84 = coordConverter.transform(c);
-		// reduce accuracy to save space
-		double x = Math.floor(100000 * wgs84.getX()) / 100000.0;
-		double y = Math.floor(100000 * wgs84.getY()) / 100000.0;
-
-		JSONArray xy = new JSONArray();
-		xy.add(x);
-		xy.add(y);
-
-		return xy;
-	}
-
-	@Override
-	public void handleEvent(ActivityStartEvent event) {
-		if (event.getTime() < RunTripsProcessor.START_TIME_SECONDS) return;
-		if (event.getTime() > 3600 +  RunTripsProcessor.START_TIME_SECONDS) return;
-
-		String activity = event.getActType();
-		Id<Link> linkId = event.getLinkId();
-		Node actStartNode = network.getLinks().get(linkId).getToNode();
-		Node actXNode = network.getLinks().get(linkId).getFromNode();
-		double timestamp = event.getTime();
-		JSONArray coord = convertToWGS84(actStartNode);
-		JSONArray coord2 = convertToWGS84(actXNode);
-
-		JSONObject json = new JSONObject();
-
-		JSONArray paths = new JSONArray();
-		paths.add(coord);
-		paths.add(coord);
-
-		JSONArray times = new JSONArray();
-		times.add(timestamp - RunTripsProcessor.START_TIME_SECONDS);
-		times.add(timestamp - RunTripsProcessor.START_TIME_SECONDS + 60);
-
-		json.put("vendor", 1);
-		json.put("path", paths);
-		json.put("timestamps", times);
-
-		try {
-			if (!isFirst) {
-				this.writer.write(",\n");
-			}
-			isFirst = false;
-			this.writer.write(json.toJSONString());
-		} catch (Exception e) {
-			// boop
+			this.csvWriter = new BufferedWriter(new FileWriter(outputCSV));
+			this.csvWriter.write("# VSP official CSV layout: time,x,y,.... and lines starting with # are comments\n");
+			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance\n");
 		}
-	}
 
-	@Override
-	public void handleEvent(VehicleEntersTrafficEvent event) {
-		String vehicleId = event.getVehicleId().toString();
+		private Network network;
+		private BufferedWriter jsonWriter;
+		private BufferedWriter csvWriter;
 
-		// test time of day: start at 8am
-		if (event.getTime() < RunTripsProcessor.START_TIME_SECONDS) return;
-		if (event.getTime() > 3600 +  RunTripsProcessor.START_TIME_SECONDS) return;
+		private int counter = 0;
+		private boolean isFirst = true;
 
-		Id linkId = event.getLinkId();
-		Link link = network.getLinks().get(linkId);
-		Node node = link.getFromNode();
+		private Map<String, JSONObject> vehicles = new HashMap<>();
+		private CH1903LV03PlustoWGS84 coordConverter = new CH1903LV03PlustoWGS84();
+		private Map<String, VehicleTrip> vehicleTrips = new HashMap<>();
 
-		// test Zurich bounding box
-//		if (node.getCoord().getX() < 2673355 || node.getCoord().getX() > 2690104 ||
-//		 		node.getCoord().getY() < 1245613 || node.getCoord().getY() > 1254337) return;
+		void addEvent(String vehicleId, Node node, double timestamp) {
 
-		JSONObject jj = new JSONObject();
-		jj.put("vendor", 0);
-		jj.put("path", new JSONArray());
-		jj.put("timestamps", new JSONArray());
-		vehicles.put(vehicleId, jj);
+			double faketime = timestamp - RunTripsProcessor.START_TIME_SECONDS;
 
-		addEvent(vehicleId, node, event.getTime());
-	}
+			JSONObject v = vehicles.get(vehicleId);
+			JSONArray wgs84 = this.convertToWGS84(node);
 
-	@Override
-	public void handleEvent(LinkEnterEvent event) {
-		String vehicleId = event.getVehicleId().toString();
-		if (!vehicles.containsKey(vehicleId)) return;
+			JSONArray path = ((JSONArray)v.get("path"));
+			JSONArray timestamps = ((JSONArray)v.get("timestamps"));
 
-		Id linkId = event.getLinkId();
-		Link link = network.getLinks().get(linkId);
-		Node node = link.getFromNode();
+			// don't add duplicate nodes
+			int index = path.size() - 1;
+			if (index > -1 &&
+					((JSONArray)path.get(index)).get(0).equals(wgs84.get(0)) &&
+					((JSONArray)path.get(index)).get(1).equals(wgs84.get(1)) &&
+					(double) timestamps.get(index) == faketime
+			) return;
 
-		addEvent(vehicleId, node, event.getTime());
-	}
+			((JSONArray)v.get("path")).add(wgs84);
+			((JSONArray)v.get("timestamps")).add(faketime);
 
-	@Override
-	public void handleEvent(LinkLeaveEvent event) {
-		String vehicleId = event.getVehicleId().toString();
-		if (!vehicles.containsKey(vehicleId)) return;
+			VehicleTrip vtrip = vehicleTrips.get(vehicleId);
+			vtrip.timestamps.add(faketime);
+			vtrip.points.add(new ImmutablePair(wgs84.get(0), wgs84.get(1)));
+			vtrip.endNode = node;
+		}
 
-		Id linkId = event.getLinkId();
-		Link link = network.getLinks().get(linkId);
-		Node node = link.getToNode();
 
-		addEvent(vehicleId, node, event.getTime());
-	}
+		JSONArray convertToWGS84(Node node) {
+			Coord c = node.getCoord();
+			Coord wgs84 = coordConverter.transform(c);
+			// reduce accuracy to save space
+			double x = Math.floor(100000 * wgs84.getX()) / 100000.0;
+			double y = Math.floor(100000 * wgs84.getY()) / 100000.0;
 
-	@Override
-	public void handleEvent (VehicleLeavesTrafficEvent event  ) {
-		String vehicleId = event.getVehicleId().toString();
-		if (!vehicles.containsKey(vehicleId)) return;
+			JSONArray xy = new JSONArray();
+			xy.add(x);
+			xy.add(y);
 
-		Id linkId = event.getLinkId();
-		Link link = network.getLinks().get(linkId);
-		Node node = link.getFromNode();
+			return xy;
+		}
 
-		addEvent(vehicleId, node, event.getTime());
+		@Override
+		public void handleEvent(ActivityStartEvent event) {
+			if (event.getTime() < RunTripsProcessor.START_TIME_SECONDS) return;
+			if (event.getTime() > 3600 +  RunTripsProcessor.START_TIME_SECONDS) return;
 
-		this.writeJson(vehicleId);
-	}
+			String activity = event.getActType();
+			Id<Link> linkId = event.getLinkId();
+			Node actStartNode = network.getLinks().get(linkId).getToNode();
+			Node actXNode = network.getLinks().get(linkId).getFromNode();
+			double timestamp = event.getTime();
+			JSONArray coord = convertToWGS84(actStartNode);
+			JSONArray coord2 = convertToWGS84(actXNode);
 
-	void writeJson(String vehicleId)  {
-		JSONObject trip = vehicles.get(vehicleId);
-		if (((JSONArray)trip.get("timestamps")).size() < 2) {
+			JSONObject json = new JSONObject();
+
+			JSONArray paths = new JSONArray();
+			paths.add(coord);
+			paths.add(coord);
+
+			JSONArray times = new JSONArray();
+			times.add(timestamp - RunTripsProcessor.START_TIME_SECONDS);
+			times.add(timestamp - RunTripsProcessor.START_TIME_SECONDS + 60);
+
+			json.put("vendor", 1);
+			json.put("path", paths);
+			json.put("timestamps", times);
+
+			try {
+				if (!isFirst) {
+					this.jsonWriter.write(",\n");
+				}
+				isFirst = false;
+				this.jsonWriter.write(json.toJSONString());
+			} catch (Exception e) {
+				// boop
+			}
+		}
+
+		@Override
+		public void handleEvent(VehicleEntersTrafficEvent event) {
+			String vehicleId = event.getVehicleId().toString();
+
+			// test time of day: start at 8am
+			// if (event.getTime() < RunTripsProcessor.START_TIME_SECONDS) return;
+			// if (event.getTime() > 3600 +  RunTripsProcessor.START_TIME_SECONDS) return;
+
+			Id linkId = event.getLinkId();
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getFromNode();
+
+			// test Zurich bounding box
+			//		if (node.getCoord().getX() < 2673355 || node.getCoord().getX() > 2690104 ||
+			//		 		node.getCoord().getY() < 1245613 || node.getCoord().getY() > 1254337) return;
+
+			JSONObject jj = new JSONObject();
+			jj.put("vendor", 0);
+			jj.put("path", new JSONArray());
+			jj.put("timestamps", new JSONArray());
+			vehicles.put(vehicleId, jj);
+
+			VehicleTrip vtrip = new VehicleTrip();
+			vtrip.startNode = node;
+			vehicleTrips.put(vehicleId, vtrip);
+
+			addEvent(vehicleId, node, event.getTime());
+		}
+
+		@Override
+		public void handleEvent(LinkEnterEvent event) {
+			String vehicleId = event.getVehicleId().toString();
+			if (!vehicles.containsKey(vehicleId)) return;
+
+			Id linkId = event.getLinkId();
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getFromNode();
+
+			addEvent(vehicleId, node, event.getTime());
+		}
+
+		@Override
+		public void handleEvent(LinkLeaveEvent event) {
+			String vehicleId = event.getVehicleId().toString();
+			if (!vehicles.containsKey(vehicleId)) return;
+
+			Id linkId = event.getLinkId();
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getToNode();
+
+			addEvent(vehicleId, node, event.getTime());
+		}
+
+		@Override
+		public void handleEvent (VehicleLeavesTrafficEvent event  ) {
+			String vehicleId = event.getVehicleId().toString();
+			if (!vehicles.containsKey(vehicleId)) return;
+
+			Id linkId = event.getLinkId();
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getFromNode();
+
+			addEvent(vehicleId, node, event.getTime());
+
+			this.writeJson(vehicleId);
+			// wrote it! remove this trip from the map
 			this.vehicles.remove(vehicleId);
-			return;
+			this.vehicleTrips.remove(vehicleId);
+
 		}
 
-		try {
-			if (!isFirst) {
-				this.writer.write(",\n");
+		void writeJson(String vehicleId)  {
+			JSONObject trip = vehicles.get(vehicleId);
+			VehicleTrip vtrip = vehicleTrips.get(vehicleId);
+
+			if (((JSONArray)trip.get("timestamps")).size() < 2) {
+				this.vehicles.remove(vehicleId);
+				this.vehicleTrips.remove(vehicleId);
+				return;
 			}
-			isFirst = false;
 
-			this.writer.write(vehicles.get(vehicleId).toJSONString());
+			try {
+				if (!isFirst) {
+					this.jsonWriter.write(",\n");
+				}
+				isFirst = false;
 
-			counter++;
-			if (counter >= RunTripsProcessor.MAX_TRIPS) {
-				closeWriter();
-				System.exit(0);
+				this.jsonWriter.write(trip.toJSONString());
+
+				int vtripLast = vtrip.timestamps.size() - 1;
+
+				Coord start = vtrip.startNode.getCoord();
+				Coord finish = vtrip.endNode.getCoord();
+				double distance = CoordUtils.calcEuclideanDistance(start,finish);
+
+				this.csvWriter.write(String.format("%.1f,%f,%f,%.1f,%f,%f,%f\n",
+						vtrip.timestamps.get(0), vtrip.points.get(0).getLeft(), vtrip.points.get(0).getRight(),
+						vtrip.timestamps.get(vtripLast), vtrip.points.get(vtripLast).getLeft(), vtrip.points.get(vtripLast).getRight(),
+						distance
+						));
+
+				counter++;
+				if (counter >= RunTripsProcessor.MAX_TRIPS) {
+					closeWriter();
+					System.exit(0);
+				}
+			} catch (Exception e) {
+				System.err.println(("Could not write!"));
+				System.exit(2);
 			}
-		} catch (Exception e) {
-			System.err.println(("Could not write!"));
-			System.exit(2);
 		}
-		// wrote it! remove this trip from the map
-		this.vehicles.remove(vehicleId);
-	}
 
-	void cleanUp() {
-		RunTripsProcessor.log.warn("Cleaning up " + vehicles.size() + "unfinished trips");
-		for (String id : vehicles.keySet()) {
-			writeJson(id);
+		void cleanUp() {
+			RunTripsProcessor.log.warn("Cleaning up " + vehicles.size() + " unfinished trips");
+			for (String id : vehicles.keySet()) {
+				writeJson(id);
+			}
+		}
+
+		void closeWriter() throws Exception {
+			this.jsonWriter.write("\n]\n");
+			this.jsonWriter.close();
+
+			this.csvWriter.close();
+
+			RunTripsProcessor.log.info("Wrote " + counter + " trips!");
 		}
 	}
 
-	void closeWriter() throws Exception {
-		this.writer.write("\n]\n");
-		this.writer.close();
-
-		RunTripsProcessor.log.info("Wrote " + counter + " trips!");
-	}
+	static class VehicleTrip {
+		List<Double> timestamps = new ArrayList();
+		List<Pair> points = new ArrayList<>();
+		Node startNode;
+		Node endNode;
+	};
 }
+
