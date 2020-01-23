@@ -59,10 +59,10 @@ public class RunTripsProcessor {
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
 
-		String eventsFile = "ivt-output_events.xml.gz";
-		String networkFile = "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
-		String outputJsonFile = "./ivt-trips.json";
-		String outputCSVFile = "./ivt-trips.csv";
+		String eventsFile = "output/output_events.xml.gz";
+		String networkFile = "output/output_network.xml.gz"; // "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
+		String outputJsonFile = "output/trips.json";
+		String outputCSVFile = "output/trips.csv";
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
@@ -179,7 +179,7 @@ public class RunTripsProcessor {
 			json.put("vendor", 1);
 			json.put("path", paths);
 			json.put("timestamps", times);
-
+/*
 			try {
 				if (!isFirst) {
 					this.jsonWriter.write(",\n");
@@ -189,6 +189,7 @@ public class RunTripsProcessor {
 			} catch (Exception e) {
 				// boop
 			}
+*/
 		}
 
 		@Override
@@ -273,13 +274,14 @@ public class RunTripsProcessor {
 			}
 
 			try {
+				/*
 				if (!isFirst) {
 					this.jsonWriter.write(",\n");
 				}
 				isFirst = false;
 
 				this.jsonWriter.write(trip.toJSONString());
-
+				*/
 				int vtripLast = vtrip.timestamps.size() - 1;
 
 				Coord start = vtrip.startNode.getCoord();
