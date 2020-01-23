@@ -86,8 +86,9 @@ public class RunMatsim {
 		config.global().setNumberOfThreads( 4 );
 
 		// Janek says to use 0.012 for 1% scenario
-		config.qsim().setFlowCapFactor(0.012);
-		config.qsim().setStorageCapFactor(0.012);
+		// But for now we will still do no-congestion with 1.0
+		// config.qsim().setFlowCapFactor(0.012);
+		// config.qsim().setStorageCapFactor(0.012);
 
 		switch( runType ) {
 			case shortRun:
