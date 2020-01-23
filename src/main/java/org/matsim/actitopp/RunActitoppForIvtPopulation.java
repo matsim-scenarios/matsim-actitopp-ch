@@ -71,7 +71,7 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
+        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
         String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";

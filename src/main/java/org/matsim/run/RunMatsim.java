@@ -67,7 +67,7 @@ public class RunMatsim {
 	enum RunType { shortRun, medRun, longRun }
 
 	public static void main(String[] args) {
-	    String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
+	    String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
 
 	    String populationScheduleFile = "population_1pct_plans_initial-coords.xml.gz";
 		// String populationScheduleFile = "trimmed.xml.gz";
