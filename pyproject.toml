@@ -10,6 +10,7 @@ panel = "^0.7.0"
 holoviews = "^1.12.7"
 pandas = "^0.25.3"
 ipywidgets = "^7.5.1"
+dfply = "^0.3.3"
 
 [tool.poetry.dev-dependencies]
 

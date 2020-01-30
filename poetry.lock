@@ -86,6 +86,18 @@ version = "0.6.0"
 
 [[package]]
 category = "main"
+description = "dplyr-style piping operations for pandas dataframes"
+name = "dfply"
+optional = false
+python-versions = "*"
+version = "0.3.3"
+
+[package.dependencies]
+numpy = "*"
+pandas = "*"
+
+[[package]]
+category = "main"
 description = "Discover and load entry points from installed packages."
 name = "entrypoints"
 optional = false
@@ -772,7 +784,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pathlib2", "contextlib2", "unittest2"]
 
 [metadata]
-content-hash = "cc3d5c74a073a8937dede12e49b122b38ee5d39ef8f311c1585025c4b87839bf"
+content-hash = "55ccd23570e26f9dcbb56ac86d060628a6224520d370d0f82ad6360a99398490"
 python-versions = "^3.6"
 
 [metadata.files]
@@ -806,6 +818,10 @@ decorator = [
 defusedxml = [
     {file = "defusedxml-0.6.0-py2.py3-none-any.whl", hash = "sha256:6687150770438374ab581bb7a1b327a847dd9c5749e396102de3fad4e8a3ef93"},
     {file = "defusedxml-0.6.0.tar.gz", hash = "sha256:f684034d135af4c6cbb949b8a4d2ed61634515257a67299e5f940fbaa34377f5"},
+]
+dfply = [
+    {file = "dfply-0.3.3-py3-none-any.whl", hash = "sha256:215966e30eb736e97e190617f74c7c9e85f7ed76b50af48bb8450f6667d4dd36"},
+    {file = "dfply-0.3.3.tar.gz", hash = "sha256:6a7da67bb6a887b22c6869b3c88a73f9aba86a0c0603693db9e11cd037e843a7"},
 ]
 entrypoints = [
     {file = "entrypoints-0.3-py2.py3-none-any.whl", hash = "sha256:589f874b313739ad35be6e0cd7efde2a4e9b6fea91edcc34e58ecbb8dbe56d19"},
