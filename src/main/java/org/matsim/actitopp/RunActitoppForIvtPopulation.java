@@ -339,8 +339,7 @@ public class RunActitoppForIvtPopulation {
 
         List<HActivity> activityList = weekPattern.getAllActivities();
         for (HActivity actitoppActivity : activityList) {
-            if (actitoppActivity.getDayIndex() == 0) { // Only use activities of first day; until 1,440min
-                // actitoppActivity.getType(); // Letter-based type
+            if (actitoppActivity.getDayIndex() == 0 || actitoppActivity.getDayIndex() == 1) { // Only use activities of first day; until 1,440min
                 actitoppActivity.getActivityType();
                 String matsimActivityType = transformActType(actitoppActivity.getActivityType());
                 Coord coord;
@@ -366,6 +365,7 @@ public class RunActitoppForIvtPopulation {
                 Activity matsimActivity = populationFactory.createActivityFromCoord(matsimActivityType, coord);
                 matsimPlan.addActivity(matsimActivity);
 
+                // TODO Take care that a leg is not the last element of a plan
                 int activityEndTime_min = actitoppActivity.getEndTime();
                 if (activityEndTime_min <= 24 * 60) { // i.e. midnight in minutes
                     matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
