@@ -71,15 +71,16 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
-        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
+        String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
         String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
+        // String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/pruned_full_ch_network.xml.gz";
 
         String municipalitiesShapeFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
-        String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
+        String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_full_ch_2018_1pct.xml.gz";
         int beginReprTimePeriod = 6;
-        int endReprTimePeriod = 10;
+        int endReprTimePeriod = 11;
 
         String populationScheduleFile = folderRoot + "population_1pct_plans_initial-coords.xml.gz";
 
@@ -284,9 +285,15 @@ public class RunActitoppForIvtPopulation {
         // 5 = worker in vocational program; 7 = retired person / pensioner
         if (employment == 1 || employment == 2 || employment == 4 || employment == 5) {
             List<Integer> outgoingCommutes = observedCommutes.get(homeMunicipality);
-            int randomInt = random.nextInt(outgoingCommutes.size());
-            destination = outgoingCommutes.get(randomInt);
-            outgoingCommutes.remove(randomInt);
+
+            if (outgoingCommutes.isEmpty()) {
+                destination = homeMunicipality;
+                LOG.warn("No observed commutes: Person ID " + personIndex + "; Home Municipality " + homeMunicipality);
+            } else {
+                int randomInt = random.nextInt(outgoingCommutes.size());
+                destination = outgoingCommutes.get(randomInt);  // don't remove the choices as we pull them.
+            }
+
             if (employment == 1 || employment == 2 || employment == 5) {
                 commutingDistanceToWork = getCommutingDistance(homeCoord, destination);
                 attr.putAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString(), destination);
@@ -338,8 +345,14 @@ public class RunActitoppForIvtPopulation {
         Plan matsimPlan = populationFactory.createPlan();
 
         List<HActivity> activityList = weekPattern.getAllActivities();
+
+        Leg matsimLeg = null;
         for (HActivity actitoppActivity : activityList) {
-            if (actitoppActivity.getDayIndex() == 0 || actitoppActivity.getDayIndex() == 1) { // Only use activities of first day; until 1,440min
+            if (actitoppActivity.getDayIndex() == 0) { // Only use activities of first day; until 1,440min
+                // add the previously-built leg, if it exists.
+                if (matsimLeg != null) matsimPlan.addLeg(matsimLeg);
+
+                // actitoppActivity.getType(); // Letter-based type
                 actitoppActivity.getActivityType();
                 String matsimActivityType = transformActType(actitoppActivity.getActivityType());
                 Coord coord;
@@ -348,15 +361,14 @@ public class RunActitoppForIvtPopulation {
                 } else if (matsimActivityType.equals(ActiToppActivityTypes.work.toString()) || matsimActivityType.equals(ActiToppActivityTypes.education.toString())) {
                     if (matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString()) != null) {
                         int workEduMunId = (int) matsimPerson.getAttributes().getAttribute(ActitoppAttributeLabels.work_edu_municipality_id.toString());
-//                        coord = municipalityCenters.get(workEduMunId); // TODO Use random coord in zone rather than zone center
-				  Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( workEduMunId ) );;
-				  coord = new Coord( point.getX(), point.getY() ) ;
+                        // coord = municipalityCenters.get(workEduMunId); // Don't use municipality center anymore; pick a random point within the municipality.
+                        Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( workEduMunId ) );;
+                        coord = new Coord( point.getX(), point.getY() ) ;
                     } else { // This the case when someone performs a work or education activity who is not expected so based on his employment status
                         int homeMunId = (int) matsimPerson.getAttributes().getAttribute(IvtPopulationParser.AttributeLabels.municipality_id.toString());
-                        coord = municipalityCenters.get(homeMunId);
-                        if ( true ) {
-                        	throw new RuntimeException("thie above needs tob etested") ;
-				}
+                        // coord = municipalityCenters.get(homeMunId);  // ^^ same
+                        Point point = GeometryUtils.getRandomPointInFeature( MatsimRandom.getRandom(), mmm.get( homeMunId ) );;
+                        coord = new Coord( point.getX(), point.getY() ) ;
                     }
                 } else {
                     coord = homeCoord; // Just as an initial guess
@@ -365,14 +377,11 @@ public class RunActitoppForIvtPopulation {
                 Activity matsimActivity = populationFactory.createActivityFromCoord(matsimActivityType, coord);
                 matsimPlan.addActivity(matsimActivity);
 
-                // TODO Take care that a leg is not the last element of a plan
                 int activityEndTime_min = actitoppActivity.getEndTime();
-                if (activityEndTime_min <= 24 * 60) { // i.e. midnight in minutes
-                    matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
+                matsimActivity.setEndTime(activityEndTime_min * 60); // times in ActiTopp in min, in MATSim in s
 
-                    Leg matsimLeg = populationFactory.createLeg(TransportMode.car); // TODO
-                    matsimPlan.addLeg(matsimLeg);
-                }
+                // The following leg will be inserted just before the NEXT activity (if there is a next activity)
+                matsimLeg = populationFactory.createLeg(TransportMode.car); // TODO
             }
         }
         return matsimPlan;

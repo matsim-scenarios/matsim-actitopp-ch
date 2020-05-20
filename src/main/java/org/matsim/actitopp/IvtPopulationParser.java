@@ -62,10 +62,10 @@ public class IvtPopulationParser {
 
     public static void main(String[] args) {
         // TODO try to use gzipped file
-        Path inputFile = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/ivt_syn_pop/population.csv");
-        String outputFileRoot = "../../svn/shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
+        Path inputFile = Paths.get("../../shared-svn/projects/snf-big-data/data/original_files/ivt_syn_pop/population.csv");
+        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
         double sampleSize = 0.01;
-        List<Integer> cantonsIncluded = Arrays.asList(24); // 24 = Neuenburg
+        List<Integer> cantonsIncluded = null; // Arrays.asList(24); // 24 = Neuenburg
 
         Scenario scenario = IvtPopulationParser.createScenarioFromIvtInput(inputFile, cantonsIncluded);
         Scenario sampleScenario = IvtPopulationParser.createScenarioSample(sampleSize, scenario);

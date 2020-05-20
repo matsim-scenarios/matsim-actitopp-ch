@@ -48,12 +48,12 @@ public class MunicipalityCommutesParser {
 
     public static void main(String[] args) {
         // TODO try to use gzipped file
-        Path inputFileMunicipalities = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2012/12501_131.csv"); // 2012
-        Path inputFileMatrix = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/swisscom/eth2/Eth4_20161001.txt");
+        Path inputFileMunicipalities = Paths.get("../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2012/12501_131.csv"); // 2012
+        Path inputFileMatrix = Paths.get("../../shared-svn/projects/snf-big-data/data/original_files/swisscom/eth2/Eth4_20161001.txt");
 
-        List<Id<Canton>> cantonsIncluded = Arrays.asList(Id.create(24, Canton.class)); // 24 = Neuenburg
+        List<Id<Canton>> cantonsIncluded = null; // Arrays.asList(Id.create(24, Canton.class)); // 24 = Neuenburg
 
-        Path inputFileMunicipalityUpdates = Paths.get("../../svn/shared-svn/projects/snf-big-data/data/original_files/municipalities/2012-2018_changes/2012-2018_changes.csv");
+        Path inputFileMunicipalityUpdates = Paths.get("../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2012-2018_changes/2012-2018_changes.csv");
         String idLabelOld = "Regions-ID_Alt";
         String idLabelNew = "Regions-ID_Neu";
         String nameLabelOld = "Regionsname_Alt";
@@ -61,7 +61,7 @@ public class MunicipalityCommutesParser {
 
         double sampleSize = 0.01;
 
-        String outputFileCommuteCounts = "../../svn/shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
+        String outputFileCommuteCounts = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_full_ch_2018_1pct.xml.gz";
 
         MunicipalityCommutesParser commuteMatrixParser = new MunicipalityCommutesParser(inputFileMunicipalities);
         commuteMatrixParser.setCantonsIncluded(cantonsIncluded);
