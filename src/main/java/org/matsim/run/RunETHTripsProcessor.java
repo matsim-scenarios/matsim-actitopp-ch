@@ -21,7 +21,6 @@ package org.matsim.run;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
-import org.jfree.util.Log;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.matsim.api.core.v01.Coord;
@@ -36,7 +35,6 @@ import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
 import org.matsim.core.events.EventsUtils;
 import org.matsim.core.events.MatsimEventsReader;
-import org.matsim.core.events.algorithms.EventWriterXML;
 import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.io.MatsimNetworkReader;
 import org.matsim.core.utils.geometry.CoordUtils;
@@ -44,35 +42,29 @@ import org.matsim.core.utils.geometry.transformations.CH1903LV03PlustoWGS84;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author bcharlton
  *
  */
-public class RunTripsProcessor {
-	public static final Logger log = Logger.getLogger( RunTripsProcessor.class ) ;
+public class RunETHTripsProcessor {
+	public static final Logger log = Logger.getLogger( RunETHTripsProcessor.class ) ;
 	public static int MAX_TRIPS = 15000000;
 	public static int START_TIME_SECONDS = 0; // 8 * 3600; // 8am
-
-	public static int PERSON_SAMPLING_RATE = 25; // 1 equals all
-
-	static EventWriterXML EVENT_WRITER;
-	static EventWriterXML EVENT_WRITER_WITH_LINKS;
 
 	public static void main(String[] args) throws Exception {
 		Config config = ConfigUtils.createConfig();
 		config.global().setNumberOfThreads( 4 );
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		String eventsFile = "../../runs-svn/snf-big-data/ivt-run/output_events_1pct.xml.gz";
-		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
-		//String eventsFile = "output/output_events.xml.gz";
-		//String networkFile = "output/output_network.xml.gz"; // "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
-		String outputJsonFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.json";
-		String outputCSVFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.csv";
-		//String outputJsonFile = "output/trips.json";
-		//String outputCSVFile = "output/trips.csv";
+
+		String networkFile = "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
+		String eventsFile = "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\output_events.xml.gz";
+		String outputCSVFile = "output/eth-trips.csv";
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
@@ -86,9 +78,6 @@ public class RunTripsProcessor {
 		MyTripHandler handler1 = new MyTripHandler(network, outputCSVFile);
 		events.addHandler(handler1);
 
-		EVENT_WRITER = new EventWriterXML(outputEventsFile);
-		EVENT_WRITER_WITH_LINKS = new EventWriterXML(outputEventsLinksFile);
-
 		//create the reader and read the file
 		MatsimEventsReader reader = new MatsimEventsReader(events);
 		reader.readFile(eventsFile);
@@ -99,31 +88,32 @@ public class RunTripsProcessor {
 		System.out.println("###--- JSON written!");
 	}
 
-	static class MyTripHandler implements PersonArrivalEventHandler, PersonDepartureEventHandler, LinkEnterEventHandler,
+	static class MyTripHandler implements LinkEnterEventHandler,
 			LinkLeaveEventHandler, VehicleEntersTrafficEventHandler, VehicleLeavesTrafficEventHandler,
 			ActivityStartEventHandler {
 
 		MyTripHandler(Network network, String outputCSV) throws Exception {
 			this.network = network;
+
 			this.csvWriter = new BufferedWriter(new FileWriter(outputCSV));
 			this.csvWriter.write("# VSP official CSV layout: time,x,y,.... and lines starting with # are comments\n");
-			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance,personId\n");
+			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance\n");
 		}
 
 		private Network network;
+		private BufferedWriter jsonWriter;
 		private BufferedWriter csvWriter;
 
 		private int counter = 0;
+		private boolean isFirst = true;
 
 		private Map<String, JSONObject> vehicles = new HashMap<>();
 		private CH1903LV03PlustoWGS84 coordConverter = new CH1903LV03PlustoWGS84();
 		private Map<String, VehicleTrip> vehicleTrips = new HashMap<>();
 
-		private Set<String> activeVehicles = new HashSet<>();
-
 		void addEvent(String vehicleId, Node node, double timestamp) {
 
-			double faketime = timestamp - RunTripsProcessor.START_TIME_SECONDS;
+			double faketime = timestamp - RunETHTripsProcessor.START_TIME_SECONDS;
 
 			JSONObject v = vehicles.get(vehicleId);
 			JSONArray wgs84 = this.convertToWGS84(node);
@@ -164,14 +154,47 @@ public class RunTripsProcessor {
 		}
 
 		@Override
-		public void handleEvent(PersonDepartureEvent event) {
-			String personId = event.getPersonId().toString();
+		public void handleEvent(ActivityStartEvent event) {
+			if (event.getTime() < RunETHTripsProcessor.START_TIME_SECONDS) return;
+			if (event.getTime() > 3600 +  RunETHTripsProcessor.START_TIME_SECONDS) return;
 
-			// Ignore freight events
-			if (personId.startsWith("freight")) return;
+			String activity = event.getActType();
+			Id<Link> linkId = event.getLinkId();
+			Node actStartNode = network.getLinks().get(linkId).getToNode();
+			Node actXNode = network.getLinks().get(linkId).getFromNode();
+			double timestamp = event.getTime();
+			JSONArray coord = convertToWGS84(actStartNode);
+			JSONArray coord2 = convertToWGS84(actXNode);
 
-			// Ignore events if person is not being sampled
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			JSONObject json = new JSONObject();
+
+			JSONArray paths = new JSONArray();
+			paths.add(coord);
+			paths.add(coord);
+
+			JSONArray times = new JSONArray();
+			times.add(timestamp - RunETHTripsProcessor.START_TIME_SECONDS);
+			times.add(timestamp - RunETHTripsProcessor.START_TIME_SECONDS + 60);
+
+			json.put("vendor", 1);
+			json.put("path", paths);
+			json.put("timestamps", times);
+/*
+			try {
+				if (!isFirst) {
+					this.jsonWriter.write(",\n");
+				}
+				isFirst = false;
+				this.jsonWriter.write(json.toJSONString());
+			} catch (Exception e) {
+				// boop
+			}
+*/
+		}
+
+		@Override
+		public void handleEvent(VehicleEntersTrafficEvent event) {
+			String vehicleId = event.getVehicleId().toString();
 
 			// test time of day: start at 8am
 			// if (event.getTime() < RunTripsProcessor.START_TIME_SECONDS) return;
@@ -179,10 +202,6 @@ public class RunTripsProcessor {
 
 			Id linkId = event.getLinkId();
 			Link link = network.getLinks().get(linkId);
-
-			// if there is no link, then person doesn't travel? Ignore them
-			if (link == null) return;
-
 			Node node = link.getFromNode();
 
 			// test Zurich bounding box
@@ -193,76 +212,90 @@ public class RunTripsProcessor {
 			jj.put("vendor", 0);
 			jj.put("path", new JSONArray());
 			jj.put("timestamps", new JSONArray());
-			vehicles.put(personId, jj);
+			vehicles.put(vehicleId, jj);
 
 			VehicleTrip vtrip = new VehicleTrip();
 			vtrip.startNode = node;
-			vehicleTrips.put(personId, vtrip);
+			vehicleTrips.put(vehicleId, vtrip);
 
-			addEvent(personId, node, event.getTime());
-			EVENT_WRITER.handleEvent(event);
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
+			addEvent(vehicleId, node, event.getTime());
 		}
 
 		@Override
-		public void handleEvent (PersonArrivalEvent event  ) {
-			String personId = event.getPersonId().toString();
-
-			if (!vehicles.containsKey(personId)) return;
-
-			// Ignore freight events
-			if (personId.startsWith("freight")) return;
-
-			// Ignore events if person is not being sampled
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+		public void handleEvent(LinkEnterEvent event) {
+			String vehicleId = event.getVehicleId().toString();
+			if (!vehicles.containsKey(vehicleId)) return;
 
 			Id linkId = event.getLinkId();
-			try {
-				Link link = network.getLinks().get(linkId);
-				Node node = link.getFromNode();
-				addEvent(personId, node, event.getTime());
-				this.writeJson(personId, false);
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getFromNode();
 
-			} catch (NullPointerException npe) {
-				RunTripsProcessor.log.warn("Person ID " + personId + " ended without a node/link");
-			}
-
-			// wrote it! remove this trip from the map
-			this.vehicles.remove(personId);
-			this.vehicleTrips.remove(personId);
-
-			EVENT_WRITER.handleEvent(event);
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
+			addEvent(vehicleId, node, event.getTime());
 		}
 
-		void writeJson(String vehicleId, boolean cleanup)  {
+		@Override
+		public void handleEvent(LinkLeaveEvent event) {
+			String vehicleId = event.getVehicleId().toString();
+			if (!vehicles.containsKey(vehicleId)) return;
+
+			Id linkId = event.getLinkId();
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getToNode();
+
+			addEvent(vehicleId, node, event.getTime());
+		}
+
+		@Override
+		public void handleEvent (VehicleLeavesTrafficEvent event  ) {
+			String vehicleId = event.getVehicleId().toString();
+			if (!vehicles.containsKey(vehicleId)) return;
+
+			Id linkId = event.getLinkId();
+			Link link = network.getLinks().get(linkId);
+			Node node = link.getFromNode();
+
+			addEvent(vehicleId, node, event.getTime());
+
+			this.writeJson(vehicleId);
+			// wrote it! remove this trip from the map
+			this.vehicles.remove(vehicleId);
+			this.vehicleTrips.remove(vehicleId);
+
+		}
+
+		void writeJson(String vehicleId)  {
 			JSONObject trip = vehicles.get(vehicleId);
 			VehicleTrip vtrip = vehicleTrips.get(vehicleId);
 
-			if (((JSONArray)trip.get("timestamps")).size() < 2 && !cleanup) {
+			if (((JSONArray)trip.get("timestamps")).size() < 2) {
 				this.vehicles.remove(vehicleId);
 				this.vehicleTrips.remove(vehicleId);
 				return;
 			}
 
 			try {
+				/*
+				if (!isFirst) {
+					this.jsonWriter.write(",\n");
+				}
+				isFirst = false;
+
+				this.jsonWriter.write(trip.toJSONString());
+				*/
 				int vtripLast = vtrip.timestamps.size() - 1;
 
 				Coord start = vtrip.startNode.getCoord();
 				Coord finish = vtrip.endNode.getCoord();
-				double distance = CoordUtils.calcEuclideanDistance(start, finish);
+				double distance = CoordUtils.calcEuclideanDistance(start,finish);
 
-				this.csvWriter.write(String.format("%.1f,%f,%f,%.1f,%f,%f,%f,%s\n",
-						vtrip.timestamps.get(0),
-						vtrip.points.get(0).getLeft(), vtrip.points.get(0).getRight(),
-						vtrip.timestamps.get(vtripLast),
-						vtrip.points.get(vtripLast).getLeft(), vtrip.points.get(vtripLast).getRight(),
-						distance,
-						vehicleId
+				this.csvWriter.write(String.format("%.1f,%f,%f,%.1f,%f,%f,%f\n",
+						vtrip.timestamps.get(0), vtrip.points.get(0).getLeft(), vtrip.points.get(0).getRight(),
+						vtrip.timestamps.get(vtripLast), vtrip.points.get(vtripLast).getLeft(), vtrip.points.get(vtripLast).getRight(),
+						distance
 						));
 
 				counter++;
-				if (counter >= RunTripsProcessor.MAX_TRIPS) {
+				if (counter >= RunETHTripsProcessor.MAX_TRIPS) {
 					closeWriter();
 					System.exit(0);
 				}
@@ -273,71 +306,19 @@ public class RunTripsProcessor {
 		}
 
 		void cleanUp() {
-			RunTripsProcessor.log.warn("Cleaning up " + vehicles.size() + " unfinished trips");
+			RunETHTripsProcessor.log.warn("Cleaning up " + vehicles.size() + " unfinished trips");
 			for (String id : vehicles.keySet()) {
-				writeJson(id, true);
+				writeJson(id);
 			}
 		}
 
 		void closeWriter() throws Exception {
+			this.jsonWriter.write("\n]\n");
+			this.jsonWriter.close();
+
 			this.csvWriter.close();
 
-			RunTripsProcessor.log.info("Wrote " + counter + " trips!");
-		}
-
-		@Override
-		public void handleEvent(ActivityStartEvent event) {
-			// Ignore events if person is not being sampled
-			String personId = event.getPersonId().toString();
-			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
-
-			EVENT_WRITER.handleEvent(event);
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
-		}
-
-		@Override
-		public void handleEvent(LinkEnterEvent event) {
-			// Ignore events if person is not being sampled
-			String vehId = event.getVehicleId().toString();
-			if (!this.activeVehicles.contains(vehId)) return;
-
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
-		}
-
-		@Override
-		public void handleEvent(LinkLeaveEvent event) {
-			// Ignore events if person is not being sampled
-			String vehId = event.getVehicleId().toString();
-			if (!this.activeVehicles.contains(vehId)) return;
-
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
-		}
-
-		@Override
-		public void handleEvent(VehicleEntersTrafficEvent event) {
-			// Ignore events if person is not being sampled
-			String personId = event.getPersonId().toString();
-			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
-
-			String vehId = event.getVehicleId().toString();
-			this.activeVehicles.add(vehId);
-
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
-		}
-
-		@Override
-		public void handleEvent(VehicleLeavesTrafficEvent event) {
-			// Ignore events if person is not being sampled
-			String personId = event.getPersonId().toString();
-			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
-
-			String vehId = event.getVehicleId().toString();
-			this.activeVehicles.remove(vehId);
-
-			EVENT_WRITER_WITH_LINKS.handleEvent(event);
+			RunETHTripsProcessor.log.info("Wrote " + counter + " trips!");
 		}
 	}
 
