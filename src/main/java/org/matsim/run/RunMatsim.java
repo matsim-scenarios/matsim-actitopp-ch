@@ -33,19 +33,14 @@ import org.matsim.contrib.locationchoice.frozenepsilons.FrozenTastesConfigGroup.
 import org.matsim.contrib.locationchoice.frozenepsilons.FrozenTastesConfigGroup.ApproximationLevel;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
-import org.matsim.core.config.groups.PlanCalcScoreConfigGroup;
-import org.matsim.core.config.groups.StrategyConfigGroup;
-import org.matsim.core.config.groups.VspExperimentalConfigGroup;
 import org.matsim.core.controler.AbstractModule;
 import org.matsim.core.controler.Controler;
 import org.matsim.core.controler.OutputDirectoryHierarchy.OverwriteFileSetting;
-import org.matsim.core.controler.events.StartupEvent;
 import org.matsim.core.controler.listener.StartupListener;
 import org.matsim.core.gbl.Gbl;
 import org.matsim.core.gbl.MatsimRandom;
 import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.algorithms.TransportModeNetworkFilter;
-import org.matsim.core.replanning.strategies.DefaultPlanStrategiesModule;
 import org.matsim.core.replanning.strategies.DefaultPlanStrategiesModule.DefaultSelector;
 import org.matsim.core.scenario.MutableScenario;
 import org.matsim.core.scenario.ScenarioUtils;
@@ -64,22 +59,17 @@ import static org.matsim.core.config.groups.VspExperimentalConfigGroup.*;
 public class RunMatsim {
 	private static final Logger log = Logger.getLogger( RunMatsim.class ) ;
 
-	enum RunType { shortRun, medRun, longRun }
-
 	public static void main(String[] args) {
-	    String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
+	    String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/"; // Switzerland
+		// String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/"; // Neuenburg
 
-	    String populationScheduleFile = "population_1pct_plans_initial-coords.xml.gz";
-		// String populationScheduleFile = "trimmed.xml.gz";
-
-	    RunType runType = RunType.shortRun ;
-		// yy not sure if it makes sense to keep the short/med/longRun differentiation at this level.  kai, jun'19
+	    String populationScheduleFile = "population_1pct_plans_initial-coords.xml.gz"; // Switzerland
+		// String populationScheduleFile = "population_1pct_plans_initial-coords_2.xml.gz"; // Neuenburg
 
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
 		Config config = ConfigUtils.loadConfig(  folderRoot + "config.xml" );
-		config.network().setInputFile( "../transport_supply/switzerland_network.xml.gz" );
-// 		config.network().setInputFile( "pruned_full_ch_network.xml.gz" );
+ 		config.network().setInputFile( "pruned_full_ch_network.xml.gz" );
 		config.plans().setInputFile(populationScheduleFile);
 		config.facilities().setInputFile( "facilities_1pct.xml.gz" );
 
@@ -87,23 +77,11 @@ public class RunMatsim {
 
 		// Janek says to use 0.012 for 1% scenario
 		// But for now we will still do no-congestion with 1.0
-		// config.qsim().setFlowCapFactor(0.012);
-		// config.qsim().setStorageCapFactor(0.012);
+		config.qsim().setFlowCapFactor(0.015);
+		config.qsim().setStorageCapFactor(0.015);
 
-		switch( runType ) {
-			case shortRun:
-				config.controler().setLastIteration( 2 );
-				config.controler().setWriteEventsUntilIteration( 2 );
-				break;
-			case medRun:
-				config.controler().setLastIteration( 100 );
-				break;
-			case longRun:
-				config.controler().setLastIteration( 1000 );
-				break;
-			default:
-				throw new RuntimeException( Gbl.NOT_IMPLEMENTED) ;
-		}
+		config.controler().setLastIteration(50);
+		// config.controler().setLastIteration(30);
 
 		// yyyy activity types need to come from Actitopp.  If we have different activity types for different durations, I prefer to program them (see in
 		// matsim-berlin). kai, jun'19
@@ -114,21 +92,10 @@ public class RunMatsim {
 		config.planCalcScore().addActivityParams( new ActivityParams( "leisure" ).setTypicalDuration( 2.*3600. ) );
 		config.planCalcScore().addActivityParams( new ActivityParams( "other" ).setTypicalDuration( 2.*3600. ) );
 
-		config.strategy().addStrategySettings( new StrategySettings( ).setStrategyName( FrozenTastes.LOCATION_CHOICE_PLAN_STRATEGY ).setWeight( 1.0 ).setDisableAfter( 10 ) );
-
-		switch ( runType ){
-			case shortRun:
-				break;
-			case medRun:
-			case longRun:
-				config.strategy().addStrategySettings( new StrategySettings().setStrategyName( FrozenTastes.LOCATION_CHOICE_PLAN_STRATEGY ).setWeight( 0.1 ) );
-				config.strategy().addStrategySettings( new StrategySettings().setStrategyName( DefaultSelector.ChangeExpBeta ).setWeight( 1.0 ) );
-				config.strategy().setFractionOfIterationsToDisableInnovation( 0.8 );
-				config.planCalcScore().setFractionOfIterationsToStartScoreMSA( 0.8 );
-			break ;
-			default:
-				throw new RuntimeException( Gbl.NOT_IMPLEMENTED ) ;
-		}
+		config.strategy().addStrategySettings( new StrategySettings().setStrategyName( FrozenTastes.LOCATION_CHOICE_PLAN_STRATEGY ).setWeight( 0.1 ) );
+		config.strategy().addStrategySettings( new StrategySettings().setStrategyName( DefaultSelector.ChangeExpBeta ).setWeight( 1.0 ) );
+		config.strategy().setFractionOfIterationsToDisableInnovation( 0.8 );
+		config.planCalcScore().setFractionOfIterationsToStartScoreMSA( 0.8 );
 
 		FrozenTastesConfigGroup dccg = ConfigUtils.addOrGetModule( config, FrozenTastesConfigGroup.class );;
 		dccg.setEpsilonScaleFactors("1.0,1.0,1.0" );
@@ -232,7 +199,5 @@ public class RunMatsim {
 		} ) ;
 
 		controler.run();
-
 	}
-
 }
