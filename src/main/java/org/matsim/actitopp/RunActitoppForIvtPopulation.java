@@ -71,18 +71,21 @@ public class RunActitoppForIvtPopulation {
 
     public static void main(String[] args) {
         // Input and output files
+        // String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/";
+        // String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/switzerland_1pct/";
         String populationFile = folderRoot + "population_1pct.xml.gz";
         String facilitiesFile = folderRoot + "facilities_1pct.xml.gz";
         String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/transport_supply/switzerland_network.xml.gz";
         // String networkFile = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/pruned_full_ch_network.xml.gz";
 
         String municipalitiesShapeFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/g2g18.shp";
-        String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_full_ch_2018_1pct.xml.gz";
+        // String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_full_ch_2018_1pct.xml.gz"; // not stored...
+        String countsFile = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_switzerland_2018_1pct.xml.gz"; // recreate it
         int beginReprTimePeriod = 6;
         int endReprTimePeriod = 11;
 
-        String populationScheduleFile = folderRoot + "population_1pct_plans_initial-coords.xml.gz";
+        String populationScheduleFile = folderRoot + "population_1pct_plans_initial-coords_2.xml.gz";
 
         // Create scenario
         MutableScenario scenario = ScenarioUtils.createMutableScenario(ConfigUtils.createConfig());
