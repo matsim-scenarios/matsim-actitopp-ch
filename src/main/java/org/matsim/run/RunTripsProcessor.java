@@ -58,11 +58,14 @@ public class RunTripsProcessor {
 		config.global().setNumberOfThreads( 4 );
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-
-		String eventsFile = "output/output_events.xml.gz";
-		String networkFile = "output/output_network.xml.gz"; // "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
-		String outputJsonFile = "output/trips.json";
-		String outputCSVFile = "output/trips.csv";
+		String eventsFile = "../../runs-svn/snf-big-data/ivt-run/output_events_1pct.xml.gz";
+		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
+		//String eventsFile = "output/output_events.xml.gz";
+		//String networkFile = "output/output_network.xml.gz"; // "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
+		String outputJsonFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.json";
+		String outputCSVFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.csv";
+		//String outputJsonFile = "output/trips.json";
+		//String outputCSVFile = "output/trips.csv";
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
