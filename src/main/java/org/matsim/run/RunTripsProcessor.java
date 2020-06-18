@@ -99,13 +99,13 @@ public class RunTripsProcessor {
 
 	static class MyTripHandler implements PersonArrivalEventHandler, PersonDepartureEventHandler, LinkEnterEventHandler,
 			LinkLeaveEventHandler, VehicleEntersTrafficEventHandler, VehicleLeavesTrafficEventHandler,
-			ActivityStartEventHandler {
+			ActivityStartEventHandler, ActivityEndEventHandler {
 
 		MyTripHandler(Network network, String outputCSV) throws Exception {
 			this.network = network;
 			this.csvWriter = new BufferedWriter(new FileWriter(outputCSV));
 			this.csvWriter.write("# VSP official CSV layout: time,x,y,.... and lines starting with # are comments\n");
-			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance,personId\n");
+			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance,personId,actStart,actEnd\n");
 		}
 
 		private Network network;
@@ -118,6 +118,8 @@ public class RunTripsProcessor {
 		private Map<String, VehicleTrip> vehicleTrips = new HashMap<>();
 
 		private Set<String> activeVehicles = new HashSet<>();
+
+		private Map<String, String> personActivities = new HashMap<>();
 
 		void addEvent(String vehicleId, Node node, double timestamp) {
 
@@ -195,6 +197,10 @@ public class RunTripsProcessor {
 
 			VehicleTrip vtrip = new VehicleTrip();
 			vtrip.startNode = node;
+
+			if (personActivities.containsKey(personId)) {
+				vtrip.actStart = personActivities.get(personId);
+			}
 			vehicleTrips.put(personId, vtrip);
 
 			addEvent(personId, node, event.getTime());
@@ -219,15 +225,11 @@ public class RunTripsProcessor {
 				Link link = network.getLinks().get(linkId);
 				Node node = link.getFromNode();
 				addEvent(personId, node, event.getTime());
-				this.writeJson(personId, false);
+//				this.writeJson(personId, false);
 
 			} catch (NullPointerException npe) {
 				RunTripsProcessor.log.warn("Person ID " + personId + " ended without a node/link");
 			}
-
-			// wrote it! remove this trip from the map
-			this.vehicles.remove(personId);
-			this.vehicleTrips.remove(personId);
 
 			EVENT_WRITER.handleEvent(event);
 			EVENT_WRITER_WITH_LINKS.handleEvent(event);
@@ -237,11 +239,11 @@ public class RunTripsProcessor {
 			JSONObject trip = vehicles.get(vehicleId);
 			VehicleTrip vtrip = vehicleTrips.get(vehicleId);
 
-			if (((JSONArray)trip.get("timestamps")).size() < 2 && !cleanup) {
-				this.vehicles.remove(vehicleId);
-				this.vehicleTrips.remove(vehicleId);
-				return;
-			}
+//			if (((JSONArray)trip.get("timestamps")).size() < 2 && !cleanup) {
+//				this.vehicles.remove(vehicleId);
+//				this.vehicleTrips.remove(vehicleId);
+//				return;
+//			}
 
 			try {
 				int vtripLast = vtrip.timestamps.size() - 1;
@@ -250,13 +252,17 @@ public class RunTripsProcessor {
 				Coord finish = vtrip.endNode.getCoord();
 				double distance = CoordUtils.calcEuclideanDistance(start, finish);
 
-				this.csvWriter.write(String.format("%.1f,%f,%f,%.1f,%f,%f,%f,%s\n",
+				// Use Locale.ROOT to force period as decimal separator
+				this.csvWriter.write(String.format(Locale.ROOT,
+						"%.1f,%f,%f,%.1f,%f,%f,%f,%s,%s,%s\n",
 						vtrip.timestamps.get(0),
 						vtrip.points.get(0).getLeft(), vtrip.points.get(0).getRight(),
 						vtrip.timestamps.get(vtripLast),
 						vtrip.points.get(vtripLast).getLeft(), vtrip.points.get(vtripLast).getRight(),
 						distance,
-						vehicleId
+						vehicleId,
+						vtrip.actStart,
+						vtrip.actEnd
 						));
 
 				counter++;
@@ -265,15 +271,23 @@ public class RunTripsProcessor {
 					System.exit(0);
 				}
 			} catch (Exception e) {
-				System.err.println(("Could not write!"));
-				System.exit(2);
+				System.err.println(("Could not write!" + vehicleId));
+				// System.exit(2);
 			}
+			// wrote it! remove this trip from the map
+			this.vehicles.remove(vehicleId);
+			this.vehicleTrips.remove(vehicleId);
+
 		}
 
 		void cleanUp() {
 			RunTripsProcessor.log.warn("Cleaning up " + vehicles.size() + " unfinished trips");
 			for (String id : vehicles.keySet()) {
-				writeJson(id, true);
+				try {
+					writeJson(id, true);
+				} catch (Exception e) {
+					// meh who cares
+				}
 			}
 		}
 
@@ -289,6 +303,14 @@ public class RunTripsProcessor {
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
 			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+
+			if (vehicleTrips.containsKey((personId))) {
+				VehicleTrip vtrip = vehicleTrips.get(personId);
+				String actEnd = event.getActType();
+				vtrip.actEnd = actEnd;
+			}
+
+			this.writeJson(personId, false);
 
 			EVENT_WRITER.handleEvent(event);
 			EVENT_WRITER_WITH_LINKS.handleEvent(event);
@@ -337,6 +359,15 @@ public class RunTripsProcessor {
 
 			EVENT_WRITER_WITH_LINKS.handleEvent(event);
 		}
+
+		@Override
+		public void handleEvent(ActivityEndEvent event) {
+			String personId = event.getPersonId().toString();
+			if (personId.startsWith("freight")) return;
+			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+
+			personActivities.put(personId, event.getActType());
+		}
 	}
 
 	static class VehicleTrip {
@@ -344,6 +375,8 @@ public class RunTripsProcessor {
 		List<Pair> points = new ArrayList<>();
 		Node startNode;
 		Node endNode;
+		String actStart = "";
+		String actEnd = "";
 	};
 }
 
