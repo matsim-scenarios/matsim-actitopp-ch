@@ -55,7 +55,7 @@ public class RunTripsProcessor {
 	public static int MAX_TRIPS = 15000000;
 	public static int START_TIME_SECONDS = 0; // 8 * 3600; // 8am
 
-	public static int PERSON_SAMPLING_RATE = 25; // 1 equals all
+	public static int PERSON_SAMPLING_RATE = 1; // 25; // 1 equals all
 
 	static EventWriterXML EVENT_WRITER;
 	static EventWriterXML EVENT_WRITER_WITH_LINKS;
@@ -67,12 +67,10 @@ public class RunTripsProcessor {
 
 		String eventsFile = "../../runs-svn/snf-big-data/ivt-run/output_events_1pct.xml.gz";
 		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
-		//String eventsFile = "output/output_events.xml.gz";
-		//String networkFile = "output/output_network.xml.gz"; // "C:\\Users\\billy\\home\\data\\snf-big-data\\from-sebastian\\switzerland_network.xml.gz";
-		String outputJsonFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.json";
+
 		String outputCSVFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.csv";
-		//String outputJsonFile = "output/trips.json";
-		//String outputCSVFile = "output/trips.csv";
+		String outputEventsFile = "../../runs-svn/snf-big-data/ivt-run/output/out-events.xml.gz";
+		String outputEventsLinksFile = "../../runs-svn/snf-big-data/ivt-run/output/out-events-link.xml.gz";
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
