@@ -60,17 +60,12 @@ import static org.matsim.core.config.groups.VspExperimentalConfigGroup.*;
 public class RunMatsim {
 	private static final Logger log = Logger.getLogger( RunMatsim.class ) ;
 
-	enum RunType { shortRun, shortIshRun, medRun, longRun }
-
 	public static void main(String[] args) {
 	    String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full-ch/"; // Switzerland
 		// String folderRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/"; // Neuenburg
 
 	    String populationScheduleFile = "population_1pct_plans_initial-coords.xml.gz"; // Switzerland
 		// String populationScheduleFile = "population_1pct_plans_initial-coords_2.xml.gz"; // Neuenburg
-
-	    RunType runType = RunType.shortIshRun ;
-		// yy not sure if it makes sense to keep the short/med/longRun differentiation at this level.  kai, jun'19
 
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
