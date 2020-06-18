@@ -59,17 +59,39 @@ public class IvtPopulationParser {
     // private static final String CAR_AVAILABILITY = "car_availability";
     private static final String EMPLOYED = "employed";
 
+    private List<Id<ActiToppUtils.Municipality>> consideredMunicipalities = new ArrayList<>();
+    private List<Id<ActiToppUtils.Canton>> consideredCantons = new ArrayList<>();
+
 
     public static void main(String[] args) {
         // TODO try to use gzipped file
         Path inputFile = Paths.get("../../shared-svn/projects/snf-big-data/data/original_files/ivt_syn_pop/population.csv"); // Stored as gz; manually uncompress this file before using it
-        // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
-        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/switzerland_1pct/";
-        double sampleSize = 0.01;
-        // <Integer> cantonsIncluded = Arrays.asList(24); // 24 = Neuenburg
-        List<Integer> cantonsIncluded = null; // Switzerland
 
-        Scenario scenario = IvtPopulationParser.createScenarioFromIvtInput(inputFile, cantonsIncluded);
+        String shapeFileWithToBeIncludedMunicipalities = "../../shared-svn/projects/snf-big-data/data/scenario/zh-metro_10pct/2018_boundaries/g2g18_zh-metro.shp";
+
+        // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/full_ch/";
+        // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/switzerland_1pct/";
+        // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
+        // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/zh-zg-sh-ag_10pct/";
+        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/zh-metro_10pct/";
+
+        // double sampleSize = 0.01;
+        double sampleSize = 0.10;
+
+        // List<Id<ActiToppUtils.Canton>> cantonsIncluded = null; // Switzerland
+        // List<Id<ActiToppUtils.Canton>> cantonsIncluded = Arrays.asList(Id.create(24, ActiToppUtils.Canton.class)); // 24 = Neuenburg
+//        List<Id<ActiToppUtils.Canton>> cantonsIncluded = Arrays.asList(
+//                Id.create(1, ActiToppUtils.Canton.class),
+//                Id.create(9, ActiToppUtils.Canton.class),
+//                Id.create(14, ActiToppUtils.Canton.class),
+//                Id.create(19, ActiToppUtils.Canton.class)); // 01 = Zürich, 09 = Zug, 14 = Schaffhausen, 19 = Aargau
+
+        IvtPopulationParser ivtPopulationParser = new IvtPopulationParser();
+        // ivtPopulationParser.setCantonsIncluded(cantonsIncluded);
+        ivtPopulationParser.setMunicipalitiesIncludedByShpFile(shapeFileWithToBeIncludedMunicipalities, "GMDNR");
+        Scenario scenario = ivtPopulationParser.createScenarioFromIvtInput(inputFile);
+
+
         Scenario sampleScenario = IvtPopulationParser.createScenarioSample(sampleSize, scenario);
 
         // The following makes sense if the scenario to work with has a different spatial resolution than the population input file.
@@ -82,7 +104,7 @@ public class IvtPopulationParser {
         IvtPopulationParser.writeMatsimFiles(sampleScenario, outputFileRoot, suffix);
     }
 
-    public static Scenario createScenarioFromIvtInput(Path inputFile, List<Integer> cantonsIncluded) {
+    public Scenario createScenarioFromIvtInput(Path inputFile) {
         LOG.info("Start creating population, households, and facilities.");
         Scenario scenario = ScenarioUtils.createScenario(ConfigUtils.createConfig());
         Population population = scenario.getPopulation();
@@ -93,8 +115,19 @@ public class IvtPopulationParser {
         try (CSVParser parser = CSVParser.parse(inputFile, StandardCharsets.UTF_8, CSVFormat.newFormat(',').withFirstRecordAsHeader())) {
             for (CSVRecord record : parser) {
                 int cantonId = (int) Double.parseDouble(record.get(CANTON_ID));
-                if (cantonsIncluded != null && !cantonsIncluded.contains(cantonId)) {
-                    continue;
+                Id<ActiToppUtils.Canton> canId = Id.create(String.valueOf(cantonId), ActiToppUtils.Canton.class);
+                if (consideredCantons.size() != 0) {
+                    if (!consideredCantons.contains(canId)) {
+                        continue;
+                    }
+                }
+
+                int municipalityId = (int) Double.parseDouble(record.get(HOME_MUNICIPALITY_ID));
+                Id<ActiToppUtils.Municipality> munId = Id.create(String.valueOf(municipalityId), ActiToppUtils.Municipality.class);
+                if (consideredMunicipalities.size() != 0) {
+                    if (!consideredMunicipalities.contains(munId)) {
+                        continue;
+                    }
                 }
 
                 Id<Person> personId = Id.createPersonId(record.get(PERSON_ID));
@@ -120,7 +153,6 @@ public class IvtPopulationParser {
                 ActivityFacility facility = null;
                 Coord homeCoord = CoordUtils.createCoord(Double.valueOf(record.get(HOME_X)), Double.valueOf(record.get(HOME_Y)));
                 facility = addOrGetFacility(facilities, householdId, homeCoord);
-                facility.getAttributes().putAttribute(AttributeLabels.household_id.toString(), householdId.toString());
                 person.getAttributes().putAttribute(AttributeLabels.facility_id.toString(), facility.getId().toString());
                 household.getAttributes().putAttribute(AttributeLabels.facility_id.toString(), facility.getId().toString());
 
@@ -129,7 +161,6 @@ public class IvtPopulationParser {
                 household.getAttributes().putAttribute(AttributeLabels.municipality_type.toString(), municipalityType.toString());
                 person.getAttributes().putAttribute(AttributeLabels.municipality_type.toString(), municipalityType.toString());
 
-                int municipalityId = (int) Double.parseDouble(record.get(HOME_MUNICIPALITY_ID));
                 person.getAttributes().putAttribute(AttributeLabels.municipality_id.toString(), municipalityId);
                 household.getAttributes().putAttribute(AttributeLabels.municipality_id.toString(), municipalityId);
                 facility.getAttributes().putAttribute(AttributeLabels.municipality_id.toString(), municipalityId);
@@ -153,6 +184,22 @@ public class IvtPopulationParser {
         assignNumberOfChildrenToPopulationAndHouseholds(households, population);
 
         return scenario;
+    }
+
+    public void setCantonsIncluded(List<Id<ActiToppUtils.Canton>> cantonsIncluded) {
+        for (Id<ActiToppUtils.Canton> cantonId : cantonsIncluded) {
+            consideredCantons.add(cantonId);
+        }
+    }
+
+    public void setMunicipalitiesIncludedByShpFile(String shapeFile, String municipalityIdentifier) {
+        ShapeFileReader shapeFileReader = new ShapeFileReader();
+        Collection<SimpleFeature> features = shapeFileReader.readFileAndInitialize(shapeFile);
+
+        for (SimpleFeature feature : features) {
+            Id<ActiToppUtils.Municipality> munId = Id.create(String.valueOf(feature.getAttribute(municipalityIdentifier)), ActiToppUtils.Municipality.class);
+            consideredMunicipalities.add(munId);
+        }
     }
 
     /*
@@ -210,7 +257,8 @@ public class IvtPopulationParser {
                 for (Id<Person> personId : household.getMemberIds()) {
                     sampledPopulation.addPerson(scenario.getPopulation().getPersons().get(personId));
                 }
-                Id<Facility> facilityId = Id.create(household.getAttributes().getAttribute(AttributeLabels.facility_id.toString()).toString(), Facility.class);
+                // Get facility id as it is stored as a facility id in the household
+                Id<ActivityFacility> facilityId = Id.create(household.getAttributes().getAttribute(AttributeLabels.facility_id.toString()).toString(), ActivityFacility.class);
                 ActivityFacility facility = scenario.getActivityFacilities().getFacilities().get(facilityId);
                 sampledFacilities.addActivityFacility(facility);
             }
@@ -249,7 +297,7 @@ public class IvtPopulationParser {
         Id<ActivityFacility> facilityId = Id.create(householdId, ActivityFacility.class);
         if (!facilities.getFacilities().containsKey(facilityId)) {
             facility = facilities.getFactory().createActivityFacility(facilityId, coord);
-            facility.getAttributes().putAttribute(AttributeLabels.household_id.toString(), householdId);
+            facility.getAttributes().putAttribute(AttributeLabels.household_id.toString(), householdId.toString());
             facilities.addActivityFacility(facility);
         } else {
             facility = facilities.getFacilities().get(facilityId);
