@@ -24,6 +24,8 @@ import org.apache.log4j.Logger;
 import org.jfree.util.Log;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.prep.PreparedGeometry;
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.events.*;
@@ -41,9 +43,12 @@ import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.io.MatsimNetworkReader;
 import org.matsim.core.utils.geometry.CoordUtils;
 import org.matsim.core.utils.geometry.transformations.CH1903LV03PlustoWGS84;
+import org.matsim.utils.gis.shp2matsim.ShpGeometryUtils;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.net.URI;
+import java.net.URL;
 import java.util.*;
 
 /**
@@ -65,13 +70,17 @@ public class RunTripsProcessor {
 		config.global().setNumberOfThreads( 4 );
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		String eventsFile = "../../runs-svn/snf-big-data/ivt-run/output_events_1pct.xml.gz";
 		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
+		String shpFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/cantons/g2k18.shp";
 
-		String outputCSVFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.csv";
-		String outputActivityFile = "../../runs-svn/snf-big-data/ivt-run/output/activities.csv";
-		String outputEventsFile = "../../runs-svn/snf-big-data/ivt-run/output/out-events.xml.gz";
-		String outputEventsLinksFile = "../../runs-svn/snf-big-data/ivt-run/output/out-events-link.xml.gz";
+		String runFolder = "../../runs-svn/snf-big-data/zh-02/";
+
+		String eventsFile = runFolder + "output_events.xml.gz";
+		String outputCSVFile = runFolder + "output/trips.csv";
+		String outputActivityFile = runFolder + "output/activities.csv";
+		String outputEventsFile = runFolder + "output/out-events.xml.gz";
+		String outputEventsLinksFile = runFolder + "out-events-link.xml.gz";
+
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
@@ -82,7 +91,7 @@ public class RunTripsProcessor {
 		System.out.println("###--- Network file read!");
 
 		//create the handler and add it
-		MyTripHandler handler1 = new MyTripHandler(network, outputCSVFile, outputActivityFile);
+		MyTripHandler handler1 = new MyTripHandler(network, outputCSVFile, outputActivityFile, shpFile);
 		events.addHandler(handler1);
 
 		EVENT_WRITER = new EventWriterXML(outputEventsFile);
@@ -102,7 +111,7 @@ public class RunTripsProcessor {
 			LinkLeaveEventHandler, VehicleEntersTrafficEventHandler, VehicleLeavesTrafficEventHandler,
 			ActivityStartEventHandler, ActivityEndEventHandler {
 
-		MyTripHandler(Network network, String outputCSV, String outputActivity) throws Exception {
+		MyTripHandler(Network network, String outputCSV, String outputActivity, String shpFile) throws Exception {
 			this.network = network;
 
 			this.csvWriter = new BufferedWriter(new FileWriter(outputCSV));
@@ -110,10 +119,14 @@ public class RunTripsProcessor {
 
 			this.activityWriter = new BufferedWriter(new FileWriter(outputActivity));
 			this.activityWriter.write("time,lon,lat,finishTime,personId,actType\n");
+
+			this.geom = ShpGeometryUtils.loadPreparedGeometries(new URL("file://" + shpFile));
 		}
 
 		private Network network;
 		private BufferedWriter csvWriter, activityWriter;
+
+		private List<PreparedGeometry> geom;
 
 		private int counter = 0;
 
@@ -261,6 +274,13 @@ public class RunTripsProcessor {
 				Coord start = vtrip.startNode.getCoord();
 				Coord finish = vtrip.endNode.getCoord();
 				double distance = CoordUtils.calcEuclideanDistance(start, finish);
+
+				// let's figure out the district
+//				ShpGeometryUtils.isCoordInPreparedGeometries(start, this.geom);
+//				if (!ShpGeometryUtils.isCoordInPreparedGeometries(finish, this.geom)) {
+//					log.warn("coord not in geom: " + finish.toString());
+//					this.geom.get(0).
+//				}
 
 				// Use Locale.ROOT to force period as decimal separator
 				this.csvWriter.write(String.format(Locale.ROOT,
