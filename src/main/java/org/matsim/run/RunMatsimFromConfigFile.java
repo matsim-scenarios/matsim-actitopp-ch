@@ -57,13 +57,18 @@ import static org.matsim.core.config.groups.StrategyConfigGroup.StrategySettings
 import static org.matsim.core.config.groups.VspExperimentalConfigGroup.VspDefaultsCheckingLevel;
 
 public class RunMatsimFromConfigFile {
-	private static final Logger log = Logger.getLogger( RunMatsimFromConfigFile.class ) ;
+	private static final Logger LOG = Logger.getLogger(RunMatsimFromConfigFile.class);
 
 	public static void main(String[] args) {
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
+		// Config
 		Config config = ConfigUtils.loadConfig(args[0]);
+		double addShoppingProb = Double.parseDouble(args[1]);
+		double addLeisureProb = Double.parseDouble(args[2]) + addShoppingProb;
+		double addOtherProb = Double.parseDouble(args[3]) + addLeisureProb;
 
+		// Activity adjustments
 		config.planCalcScore().addActivityParams( new ActivityParams( "home" ).setTypicalDuration( 12.*3600. ) );
 		config.planCalcScore().addActivityParams( new ActivityParams( "work" ).setTypicalDuration( 8.*3600. ) );
 		config.planCalcScore().addActivityParams( new ActivityParams( "education" ).setTypicalDuration( 6.*3600. ) );
@@ -71,40 +76,31 @@ public class RunMatsimFromConfigFile {
 		config.planCalcScore().addActivityParams( new ActivityParams( "leisure" ).setTypicalDuration( 2.*3600. ) );
 		config.planCalcScore().addActivityParams( new ActivityParams( "other" ).setTypicalDuration( 2.*3600. ) );
 
-		// ### SCENARIO: ###
+		// Scenario
+		Scenario scenario = ScenarioUtils.loadScenario(config);
 
-		Scenario scenario = ScenarioUtils.loadScenario( config ) ;
-
-		// Create scenario
-		TransportModeNetworkFilter filter = new TransportModeNetworkFilter(scenario.getNetwork());
-		Network carNetwork = NetworkUtils.createNetwork();
-		Set<String> modeSet = new HashSet<>();
-		modeSet.add( TransportMode.car );
-		filter.filter(carNetwork, modeSet);
-		((MutableScenario)scenario).setNetwork(carNetwork );
-
-		for( Link link : scenario.getNetwork().getLinks().values() ){
-			if ( link.getLength() < 1. ) {
-				log.warn("link shorter than 1 meter") ;
+		// Network adjustments
+		for(Link link : scenario.getNetwork().getLinks().values()){
+			if (link.getLength() < 1. ) {
+				LOG.warn("Link shorter than 1 meter");
 				link.setLength( 1. );
 			}
-			if ( link.getFreespeed() > 999999. ) {
-				log.warn("free speed larger than 999999 m/s") ;
+			if (link.getFreespeed() > 999999.) {
+				LOG.warn("Free speed larger than 999999 m/s");
 				link.setFreespeed( 999999. );
 			}
 		}
 
-		new org.matsim.core.network.algorithms.NetworkCleaner().run(scenario.getNetwork());
-
+		// Plan adjustments
 		PopulationFactory pf = scenario.getPopulation().getFactory();;
-		for( Person person : scenario.getPopulation().getPersons().values() ){
+		for(Person person : scenario.getPopulation().getPersons().values()) {
 			final List<PlanElement> planElements = person.getSelectedPlan().getPlanElements();
 			// find home coordinate:
 			Coord homeCoord = null ;
-			for( PlanElement planElement : planElements ){
-				if ( planElement instanceof Activity ) {
-					if ( ((Activity) planElement).getType().equals( "home" ) ) {
-						homeCoord = ((Activity) planElement).getCoord() ;
+			for(PlanElement planElement : planElements){
+				if (planElement instanceof Activity) {
+					if (((Activity) planElement).getType().equals("home")) {
+						homeCoord = ((Activity) planElement).getCoord();
 						break ;
 					}
 				}
@@ -127,34 +123,34 @@ public class RunMatsimFromConfigFile {
 			}
 		}
 
+		// Facility adjustments
 		Random rnd = MatsimRandom.getLocalInstance();;
 		final ActivityFacilities facilities = scenario.getActivityFacilities();
 		ActivityFacilitiesFactory ff = facilities.getFactory();;
 		for( ActivityFacility facility : facilities.getFacilities().values()) {
-			double rrr = rnd.nextDouble();;
-			if ( rrr < 0.33 ) {
-				ActivityOption option = ff.createActivityOption( "shopping" ) ;
-				facility.addActivityOption( option );
-			} else if ( rrr < 0.66 ) {
-				ActivityOption option = ff.createActivityOption( "leisure" ) ;
-				facility.addActivityOption( option );
-			} else {
-				ActivityOption option = ff.createActivityOption( "other" ) ;
-				facility.addActivityOption( option );
+			double random = rnd.nextDouble();
+            if (random < addShoppingProb) {
+				ActivityOption option = ff.createActivityOption("shopping");
+				facility.addActivityOption(option);
+            } else if (random < addLeisureProb) {
+				ActivityOption option = ff.createActivityOption("leisure");
+				facility.addActivityOption(option);
+            } else if (random < addOtherProb) {
+				ActivityOption option = ff.createActivityOption("other");
+				facility.addActivityOption(option);
 			}
 		}
 
-		// ### CONTROL(L)ER: ###
-
+		// Controller
 		Controler controler = new Controler(scenario);
 
-		FrozenTastes.configure( controler );
+		FrozenTastes.configure(controler);
 
 		if (controler.getConfig().transit().isUseTransit()) {
 			controler.addOverridingModule( new AbstractModule() {
 				@Override
 				public void install() {
-					install( new SwissRailRaptorModule() );
+					install(new SwissRailRaptorModule());
 				}
 			} );
 		}
