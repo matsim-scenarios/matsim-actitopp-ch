@@ -73,10 +73,11 @@ public class IvtPopulationParser {
         // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/switzerland_1pct/";
         // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/neuenburg_1pct/";
         // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/zh-zg-sh-ag_10pct/";
-        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/zh-metro_10pct/";
+        String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/zh-metro_1pct/";
+        // String outputFileRoot = "../../shared-svn/projects/snf-big-data/data/scenario/zh-metro_10pct/";
 
-        // double sampleSize = 0.01;
-        double sampleSize = 0.10;
+        double sampleSize = 0.01;
+        // double sampleSize = 0.10;
 
         // List<Id<ActiToppUtils.Canton>> cantonsIncluded = null; // Switzerland
         // List<Id<ActiToppUtils.Canton>> cantonsIncluded = Arrays.asList(Id.create(24, ActiToppUtils.Canton.class)); // 24 = Neuenburg

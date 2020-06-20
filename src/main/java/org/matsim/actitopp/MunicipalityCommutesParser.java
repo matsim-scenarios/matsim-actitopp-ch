@@ -63,18 +63,21 @@ public class MunicipalityCommutesParser {
         String nameLabelOld = "Regionsname_Alt";
         String nameLabelNew = "Regionsname_Neu";
 
-        // double sampleSize = 0.01;
-        double sampleSize = 0.10;
+        double sampleSize = 0.01;
+        // double sampleSize = 0.10;
 
         // String outputFileCommuteCounts = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_neuenburg_2018_1pct.xml.gz";
         // String outputFileCommuteCounts = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_switzerland_2018_1pct.xml.gz"; // recreate it
-        String outputFileCommuteCounts = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_zh-metro_2018_10pct_2.xml.gz"; // recreate it
+        String outputFileCommuteCounts = "../../shared-svn/projects/snf-big-data/data/commute_counts/20161001_zh-metro_2018_1pct.xml.gz"; // recreate it
 
         MunicipalityCommutesParser commuteMatrixParser = new MunicipalityCommutesParser(inputFileMunicipalities);
         // commuteMatrixParser.setCantonsIncluded(cantonsIncluded);
         commuteMatrixParser.setMunicipalitiesIncludedByShpFile(shapeFileWithToBeIncludedMunicipalities, "GMDNR");
-        commuteMatrixParser.setMunicipalityUpdater(inputFileMunicipalityUpdates, idLabelOld, idLabelNew, nameLabelOld, nameLabelNew);
+        // Need to be added manually as they are not contained in the shapefile, c.f. 2012-2018_changes.csv
+        // 132/133 -> 295; 171/179 -> 297; 174/175 -> 296; 212 -> 298; 217/222 -> 294; 229 -> 298; 4069 -> 4063
+        commuteMatrixParser.addIncludedMunicipalities(Arrays.asList(132, 133, 171, 174, 175, 179, 212, 217, 222, 229, 4069));
 
+        commuteMatrixParser.setMunicipalityUpdater(inputFileMunicipalityUpdates, idLabelOld, idLabelNew, nameLabelOld, nameLabelNew);
         Counts commuteCounts = commuteMatrixParser.createCommuteCounts(inputFileMatrix, "commuteCounts", 20161001);
         commuteMatrixParser.scaleCounts(commuteCounts, sampleSize);
         commuteMatrixParser.writeCommuteCounts(commuteCounts, outputFileCommuteCounts);
@@ -213,6 +216,13 @@ public class MunicipalityCommutesParser {
 
         for (SimpleFeature feature : features) {
             Id<ActiToppUtils.Municipality> munId = Id.create(String.valueOf(feature.getAttribute(municipalityIdentifier)), ActiToppUtils.Municipality.class);
+            consideredMunicipalities.add(munId);
+        }
+    }
+
+    public void addIncludedMunicipalities(List<Integer> municipalityIds) {
+        for (Integer municipalityId : municipalityIds) {
+            Id<ActiToppUtils.Municipality> munId = Id.create(municipalityId, ActiToppUtils.Municipality.class);
             consideredMunicipalities.add(munId);
         }
     }
