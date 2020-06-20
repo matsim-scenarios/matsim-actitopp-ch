@@ -18,6 +18,7 @@
  * *********************************************************************** */
 package org.matsim.run;
 
+import ch.sbb.matsim.routing.pt.raptor.SwissRailRaptorModule;
 import com.google.inject.Singleton;
 import org.apache.log4j.Logger;
 import org.matsim.api.core.v01.Coord;
@@ -148,6 +149,15 @@ public class RunMatsimFromConfigFile {
 		Controler controler = new Controler(scenario);
 
 		FrozenTastes.configure( controler );
+
+		if (controler.getConfig().transit().isUseTransit()) {
+			controler.addOverridingModule( new AbstractModule() {
+				@Override
+				public void install() {
+					install( new SwissRailRaptorModule() );
+				}
+			} );
+		}
 
 		controler.addOverridingModule( new AbstractModule(){
 			@Override public void install(){
