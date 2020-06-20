@@ -24,6 +24,8 @@ import org.apache.log4j.Logger;
 import org.jfree.util.Log;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.prep.PreparedGeometry;
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.events.*;
@@ -41,9 +43,12 @@ import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.io.MatsimNetworkReader;
 import org.matsim.core.utils.geometry.CoordUtils;
 import org.matsim.core.utils.geometry.transformations.CH1903LV03PlustoWGS84;
+import org.matsim.utils.gis.shp2matsim.ShpGeometryUtils;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.net.URI;
+import java.net.URL;
 import java.util.*;
 
 /**
@@ -52,7 +57,7 @@ import java.util.*;
  */
 public class RunTripsProcessor {
 	public static final Logger log = Logger.getLogger( RunTripsProcessor.class ) ;
-	public static int MAX_TRIPS = 15000000;
+	public static int MAX_TRIPS = 1115000000;
 	public static int START_TIME_SECONDS = 0; // 8 * 3600; // 8am
 
 	public static int PERSON_SAMPLING_RATE = 1; // 25; // 1 equals all
@@ -65,12 +70,17 @@ public class RunTripsProcessor {
 		config.global().setNumberOfThreads( 4 );
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		String eventsFile = "../../runs-svn/snf-big-data/ivt-run/output_events_1pct.xml.gz";
 		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
+		String shpFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/cantons/g2k18.shp";
 
-		String outputCSVFile = "../../runs-svn/snf-big-data/ivt-run/output/trips.csv";
-		String outputEventsFile = "../../runs-svn/snf-big-data/ivt-run/output/out-events.xml.gz";
-		String outputEventsLinksFile = "../../runs-svn/snf-big-data/ivt-run/output/out-events-link.xml.gz";
+		String runFolder = "../../runs-svn/snf-big-data/zh-02/";
+
+		String eventsFile = runFolder + "output_events.xml.gz";
+		String outputCSVFile = runFolder + "output/trips.csv";
+		String outputActivityFile = runFolder + "output/activities.csv";
+		String outputEventsFile = runFolder + "output/out-events.xml.gz";
+		String outputEventsLinksFile = runFolder + "out-events-link.xml.gz";
+
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
@@ -81,7 +91,7 @@ public class RunTripsProcessor {
 		System.out.println("###--- Network file read!");
 
 		//create the handler and add it
-		MyTripHandler handler1 = new MyTripHandler(network, outputCSVFile);
+		MyTripHandler handler1 = new MyTripHandler(network, outputCSVFile, outputActivityFile, shpFile);
 		events.addHandler(handler1);
 
 		EVENT_WRITER = new EventWriterXML(outputEventsFile);
@@ -99,17 +109,24 @@ public class RunTripsProcessor {
 
 	static class MyTripHandler implements PersonArrivalEventHandler, PersonDepartureEventHandler, LinkEnterEventHandler,
 			LinkLeaveEventHandler, VehicleEntersTrafficEventHandler, VehicleLeavesTrafficEventHandler,
-			ActivityStartEventHandler {
+			ActivityStartEventHandler, ActivityEndEventHandler {
 
-		MyTripHandler(Network network, String outputCSV) throws Exception {
+		MyTripHandler(Network network, String outputCSV, String outputActivity, String shpFile) throws Exception {
 			this.network = network;
+
 			this.csvWriter = new BufferedWriter(new FileWriter(outputCSV));
-			this.csvWriter.write("# VSP official CSV layout: time,x,y,.... and lines starting with # are comments\n");
-			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance,personId\n");
+			this.csvWriter.write("time,x,y,finishTime,finishX,finishY,distance,personId,actStart,actEnd\n");
+
+			this.activityWriter = new BufferedWriter(new FileWriter(outputActivity));
+			this.activityWriter.write("time,lon,lat,finishTime,personId,actType\n");
+
+			this.geom = ShpGeometryUtils.loadPreparedGeometries(new URL("file://" + shpFile));
 		}
 
 		private Network network;
-		private BufferedWriter csvWriter;
+		private BufferedWriter csvWriter, activityWriter;
+
+		private List<PreparedGeometry> geom;
 
 		private int counter = 0;
 
@@ -118,6 +135,8 @@ public class RunTripsProcessor {
 		private Map<String, VehicleTrip> vehicleTrips = new HashMap<>();
 
 		private Set<String> activeVehicles = new HashSet<>();
+		private Map<String, String> personActivities = new HashMap<>();
+		private Map<String, Activity> personActivityDetails = new HashMap<>();
 
 		void addEvent(String vehicleId, Node node, double timestamp) {
 
@@ -161,6 +180,12 @@ public class RunTripsProcessor {
 			return xy;
 		}
 
+		Coord convertWGS84Coord(Node node) {
+			Coord c = node.getCoord();
+			Coord wgs84 = coordConverter.transform(c);
+			return wgs84;
+		}
+
 		@Override
 		public void handleEvent(PersonDepartureEvent event) {
 			String personId = event.getPersonId().toString();
@@ -195,6 +220,10 @@ public class RunTripsProcessor {
 
 			VehicleTrip vtrip = new VehicleTrip();
 			vtrip.startNode = node;
+
+			if (personActivities.containsKey(personId)) {
+				vtrip.actStart = personActivities.get(personId);
+			}
 			vehicleTrips.put(personId, vtrip);
 
 			addEvent(personId, node, event.getTime());
@@ -219,15 +248,11 @@ public class RunTripsProcessor {
 				Link link = network.getLinks().get(linkId);
 				Node node = link.getFromNode();
 				addEvent(personId, node, event.getTime());
-				this.writeJson(personId, false);
+//				this.writeJson(personId, false);
 
 			} catch (NullPointerException npe) {
 				RunTripsProcessor.log.warn("Person ID " + personId + " ended without a node/link");
 			}
-
-			// wrote it! remove this trip from the map
-			this.vehicles.remove(personId);
-			this.vehicleTrips.remove(personId);
 
 			EVENT_WRITER.handleEvent(event);
 			EVENT_WRITER_WITH_LINKS.handleEvent(event);
@@ -237,11 +262,11 @@ public class RunTripsProcessor {
 			JSONObject trip = vehicles.get(vehicleId);
 			VehicleTrip vtrip = vehicleTrips.get(vehicleId);
 
-			if (((JSONArray)trip.get("timestamps")).size() < 2 && !cleanup) {
-				this.vehicles.remove(vehicleId);
-				this.vehicleTrips.remove(vehicleId);
-				return;
-			}
+//			if (((JSONArray)trip.get("timestamps")).size() < 2 && !cleanup) {
+//				this.vehicles.remove(vehicleId);
+//				this.vehicleTrips.remove(vehicleId);
+//				return;
+//			}
 
 			try {
 				int vtripLast = vtrip.timestamps.size() - 1;
@@ -250,13 +275,24 @@ public class RunTripsProcessor {
 				Coord finish = vtrip.endNode.getCoord();
 				double distance = CoordUtils.calcEuclideanDistance(start, finish);
 
-				this.csvWriter.write(String.format("%.1f,%f,%f,%.1f,%f,%f,%f,%s\n",
+				// let's figure out the district
+//				ShpGeometryUtils.isCoordInPreparedGeometries(start, this.geom);
+//				if (!ShpGeometryUtils.isCoordInPreparedGeometries(finish, this.geom)) {
+//					log.warn("coord not in geom: " + finish.toString());
+//					this.geom.get(0).
+//				}
+
+				// Use Locale.ROOT to force period as decimal separator
+				this.csvWriter.write(String.format(Locale.ROOT,
+						"%.1f,%f,%f,%.1f,%f,%f,%f,%s,%s,%s\n",
 						vtrip.timestamps.get(0),
 						vtrip.points.get(0).getLeft(), vtrip.points.get(0).getRight(),
 						vtrip.timestamps.get(vtripLast),
 						vtrip.points.get(vtripLast).getLeft(), vtrip.points.get(vtripLast).getRight(),
 						distance,
-						vehicleId
+						vehicleId,
+						vtrip.actStart,
+						vtrip.actEnd
 						));
 
 				counter++;
@@ -265,20 +301,40 @@ public class RunTripsProcessor {
 					System.exit(0);
 				}
 			} catch (Exception e) {
-				System.err.println(("Could not write!"));
-				System.exit(2);
+				System.err.println(("Could not write!" + vehicleId));
+				// System.exit(2);
 			}
+			// wrote it! remove this trip from the map (if we're not already looping on the map)
+			if (!cleanup) {
+				this.vehicles.remove(vehicleId);
+				this.vehicleTrips.remove(vehicleId);
+
+			}
+
 		}
 
 		void cleanUp() {
 			RunTripsProcessor.log.warn("Cleaning up " + vehicles.size() + " unfinished trips");
 			for (String id : vehicles.keySet()) {
-				writeJson(id, true);
+				try {
+					writeJson(id, true);
+				} catch (Exception e) {
+					// meh who cares
+				}
 			}
+
+			RunTripsProcessor.log.warn("Not cleaning up " + personActivityDetails.size() + " unfinished activities");
+
+//			for (String key: personActivityDetails.keySet()) {
+//				Activity a = personActivityDetails.get(key);
+//				RunTripsProcessor.log.info(a);
+//			}
+
 		}
 
 		void closeWriter() throws Exception {
 			this.csvWriter.close();
+			this.activityWriter.close();
 
 			RunTripsProcessor.log.info("Wrote " + counter + " trips!");
 		}
@@ -289,6 +345,31 @@ public class RunTripsProcessor {
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
 			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+
+			if (vehicleTrips.containsKey((personId))) {
+				VehicleTrip vtrip = vehicleTrips.get(personId);
+				String actEnd = event.getActType();
+				vtrip.actEnd = actEnd;
+			}
+
+			Activity a = new Activity();
+			a.personId = personId;
+			a.timeStart = event.getTime();
+			a.actType = event.getActType();
+
+			// figure out location - startnode? getCoord returns null :-(
+			try {
+				Id linkId = event.getLinkId();
+				Link l = this.network.getLinks().get(linkId);
+				Coord wgs84 = convertWGS84Coord(l.getFromNode());
+				a.location=new ImmutablePair(wgs84.getX(), wgs84.getY());
+			} catch (Exception e) {
+				// who cares
+			}
+
+			personActivityDetails.put(personId, a);
+
+			this.writeJson(personId, false);
 
 			EVENT_WRITER.handleEvent(event);
 			EVENT_WRITER_WITH_LINKS.handleEvent(event);
@@ -337,6 +418,33 @@ public class RunTripsProcessor {
 
 			EVENT_WRITER_WITH_LINKS.handleEvent(event);
 		}
+
+		@Override
+		public void handleEvent(ActivityEndEvent event) {
+			String personId = event.getPersonId().toString();
+			if (personId.startsWith("freight")) return;
+			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+
+			personActivities.put(personId, event.getActType());
+
+			if (personActivityDetails.containsKey(personId)) {
+				try {
+					Activity a = personActivityDetails.get(personId);
+					this.activityWriter.write(String.format(Locale.ROOT,
+						"%.1f,%.5f,%.5f,%.1f,%s,%s\n",
+						a.timeStart,
+						a.location.getLeft(), a.location.getRight(),
+						event.getTime(),
+						a.personId,
+						a.actType));
+
+					personActivityDetails.remove(personId);
+				} catch (Exception e) {
+					// who cares
+				}
+			}
+
+		}
 	}
 
 	static class VehicleTrip {
@@ -344,6 +452,20 @@ public class RunTripsProcessor {
 		List<Pair> points = new ArrayList<>();
 		Node startNode;
 		Node endNode;
+		String actStart = "";
+		String actEnd = "";
 	};
+
+	static class Activity {
+		String personId;
+		Pair location;
+		Double timeStart;
+		Double timeEnd;
+		String actType;
+
+		public String toString() {
+			return personId + "," + timeStart +"," + actType ;
+		}
+	}
 }
 
