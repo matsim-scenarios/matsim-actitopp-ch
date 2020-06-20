@@ -70,17 +70,16 @@ public class RunTripsProcessor {
 		config.global().setNumberOfThreads( 4 );
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
 		String shpFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/cantons/g2k18.shp";
 
-		String runFolder = "../../runs-svn/snf-big-data/zh-02/";
+		String runFolder = "../../runs-svn/snf-big-data/ivt_zh_10pct/";
 
+		String networkFile = runFolder + "output_network.xml.gz";
 		String eventsFile = runFolder + "output_events.xml.gz";
 		String outputCSVFile = runFolder + "output/trips.csv";
 		String outputActivityFile = runFolder + "output/activities.csv";
 		String outputEventsFile = runFolder + "output/out-events.xml.gz";
 		String outputEventsLinksFile = runFolder + "out-events-link.xml.gz";
-
 
 		//create an event object
 		EventsManager events = EventsUtils.createEventsManager();
@@ -193,6 +192,9 @@ public class RunTripsProcessor {
 			// Ignore freight events
 			if (personId.startsWith("freight")) return;
 
+			// Ignore event if not in car-mode
+			if (!event.getLegMode().equals("car")) return;
+
 			// Ignore events if person is not being sampled
 			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
@@ -259,7 +261,6 @@ public class RunTripsProcessor {
 		}
 
 		void writeJson(String vehicleId, boolean cleanup)  {
-			JSONObject trip = vehicles.get(vehicleId);
 			VehicleTrip vtrip = vehicleTrips.get(vehicleId);
 
 //			if (((JSONArray)trip.get("timestamps")).size() < 2 && !cleanup) {
@@ -301,6 +302,7 @@ public class RunTripsProcessor {
 					System.exit(0);
 				}
 			} catch (Exception e) {
+				e.printStackTrace();
 				System.err.println(("Could not write!" + vehicleId));
 				// System.exit(2);
 			}
@@ -345,6 +347,10 @@ public class RunTripsProcessor {
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
 			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+
+			// ignore activites from people not in the vehicle database
+			// (yes we are mixing persons and vehicles)
+			if (!vehicles.containsKey(personId)) return;
 
 			if (vehicleTrips.containsKey((personId))) {
 				VehicleTrip vtrip = vehicleTrips.get(personId);
