@@ -70,16 +70,20 @@ public class RunTripsProcessor {
 		config.global().setNumberOfThreads( 4 );
 		System.setProperty("matsim.preferLocalDtds", "true") ;
 
-		String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz";
+		// String networkFile = "../../runs-svn/snf-big-data/ivt-run/switzerland_network.xml.gz"; // CH1903+ LV95
+
 		String shpFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/cantons/g2k18.shp";
 
-		String runFolder = "../../runs-svn/snf-big-data/zh-02/";
+		// String runFolder = "../../runs-svn/snf-big-data/zh-02/";
+        String runFolder = "../../runs-svn/snf-big-data/ivt_zh_10pct/";
 
 		String eventsFile = runFolder + "output_events.xml.gz";
 		String outputCSVFile = runFolder + "output/trips.csv";
 		String outputActivityFile = runFolder + "output/activities.csv";
 		String outputEventsFile = runFolder + "output/out-events.xml.gz";
 		String outputEventsLinksFile = runFolder + "out-events-link.xml.gz";
+
+        String networkFile = runFolder + "output_network.xml.gz"; // CH1903+ LV95
 
 
 		//create an event object
