@@ -194,7 +194,7 @@ public class RunTripsProcessor {
 			if (personId.startsWith("freight")) return;
 
 			// Ignore events if person is not being sampled
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
 			// test time of day: start at 8am
 			// if (event.getTime() < RunTripsProcessor.START_TIME_SECONDS) return;
@@ -241,7 +241,7 @@ public class RunTripsProcessor {
 			if (personId.startsWith("freight")) return;
 
 			// Ignore events if person is not being sampled
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
 			Id linkId = event.getLinkId();
 			try {
@@ -344,7 +344,7 @@ public class RunTripsProcessor {
 			// Ignore events if person is not being sampled
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
 			if (vehicleTrips.containsKey((personId))) {
 				VehicleTrip vtrip = vehicleTrips.get(personId);
@@ -398,7 +398,7 @@ public class RunTripsProcessor {
 			// Ignore events if person is not being sampled
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
 			String vehId = event.getVehicleId().toString();
 			this.activeVehicles.add(vehId);
@@ -411,7 +411,7 @@ public class RunTripsProcessor {
 			// Ignore events if person is not being sampled
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
 			String vehId = event.getVehicleId().toString();
 			this.activeVehicles.remove(vehId);
@@ -423,7 +423,7 @@ public class RunTripsProcessor {
 		public void handleEvent(ActivityEndEvent event) {
 			String personId = event.getPersonId().toString();
 			if (personId.startsWith("freight")) return;
-			if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
+			// if (Integer.parseInt(personId) % PERSON_SAMPLING_RATE != 0) return;
 
 			personActivities.put(personId, event.getActType());
 
