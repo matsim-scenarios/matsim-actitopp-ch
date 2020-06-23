@@ -72,13 +72,13 @@ public class RunTripsProcessor {
 
 		String shpFile = "../../shared-svn/projects/snf-big-data/data/original_files/municipalities/2018_boundaries/cantons/g2k18.shp";
 
-		String runFolder = "../../runs-svn/snf-big-data/zh-12/";
+		String runFolder = "../../runs-svn/snf-big-data/zh-13/";
 
 		String networkFile = runFolder + "output_network.xml.gz";
 		String eventsFile = runFolder + "output_events.xml.gz";
-		String outputCSVFile = runFolder + "analysis/trips.csv";
-		String outputActivityFile = runFolder + "analysis/activities.csv";
-		String outputEventsFile = runFolder + "analysis/out-events.xml.gz";
+		String outputCSVFile = runFolder + "analysis-python/trips.csv";
+		String outputActivityFile = runFolder + "analysis-python/activities.csv";
+		String outputEventsFile = runFolder + "analysis-python/out-events.xml.gz";
 		String outputEventsLinksFile = runFolder + "out-events-link.xml.gz";
 
 		//create an event object
