@@ -16,15 +16,13 @@
  *   See also COPYING, LICENSE and WARRANTY file                           *
  *                                                                         *
  * *********************************************************************** */
-package org.matsim.run;
+package org.matsim.analysis;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
-import org.jfree.util.Log;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.prep.PreparedGeometry;
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
@@ -47,7 +45,6 @@ import org.matsim.utils.gis.shp2matsim.ShpGeometryUtils;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
-import java.net.URI;
 import java.net.URL;
 import java.util.*;
 
