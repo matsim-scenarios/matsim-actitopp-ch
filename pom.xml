@@ -3,11 +3,11 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.matsim</groupId>
-	<artifactId>snf-big-data</artifactId>
+	<artifactId>matsim-actitopp-ch</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 
-	<name>SNF Big Data project</name>
-	<description>SNF Big Data project</description>
+	<name>MATSim-actiTopp integration</name>
+	<description>MATSim-actiTopp integration</description>
 
 	<properties>
 	  <matsim.version>13.0-SNAPSHOT</matsim.version>
