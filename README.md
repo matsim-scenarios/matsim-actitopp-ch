@@ -4,7 +4,8 @@
 
 ### About this project
 
-This repository provides an integration of MATSim and actitopp and as an example application a toolchain to create MATSim transport models for Swiss regions.
+This repository provides an integration of MATSim and actitopp and as an example application of a toolchain to create MATSim transport models for Swiss regions. It is documented in <a rel="license" href="https://doi.org/10.1016/j.trpro.2021.01.073">this paper</a>.
+
 
 ### Licenses
 
