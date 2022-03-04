@@ -10,7 +10,7 @@
 	<description>MATSim-actiTopp integration</description>
 
 	<properties>
-	  <matsim.version>13.0-SNAPSHOT</matsim.version>
+	  <matsim.version>13.0</matsim.version>
 	</properties>
 
 	<repositories>
@@ -24,7 +24,7 @@
 		<repository>
 			<!-- Repository for MATSim releases (MATSim is not on Maven central) -->
 			<id>matsim</id>
-			<url>https://dl.bintray.com/matsim/matsim</url>
+			<url>https://repo.matsim.org/repository/matsim</url>
 		</repository>
  		<repository>
 			<!-- For MATSim snapshots: -->
@@ -97,9 +97,9 @@
 		<version>master</version>
 		</dependency>
 		<dependency>
-			<groupId>org.matsim.vsp.vsp-playgrounds</groupId>
+			<groupId>org.matsim.contrib</groupId>
 			<artifactId>vsp</artifactId>
-			<version>0.11.0-SNAPSHOT</version>
+			<version>${matsim.version}</version>
 			<scope>compile</scope>
 		</dependency>
 		<dependency>
