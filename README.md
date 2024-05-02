@@ -10,3 +10,7 @@ This repository provides an integration of MATSim and actitopp and as an example
 ### Licenses
 
 The **MATSim program code** in this repository is distributed under the terms of the [GNU General Public License as published by the Free Software Foundation (version 2)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html). The MATSim program code are files that reside in the `src` directory hierarchy and typically end with `*.java`.
+
+### Internal Documentation
+
+See [GoogleDoc](https://docs.google.com/document/d/1kXN9stDRWG3lQnYP247Fpm7KPgQ7Fk8i6H516J7VEno/edit)
